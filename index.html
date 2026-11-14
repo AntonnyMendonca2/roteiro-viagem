@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0e0e">
+  <title>Mapa da Viagem — Europa 2027</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ===== Mapa (D3 desenha dentro deste SVG) ===== -->
+  <svg id="map" role="img" aria-label="Mapa interativo da Europa com o roteiro da viagem">
+    <defs>
+      <!-- hachura da área informativa (Ucrânia) -->
+      <pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <line x1="0" y1="0" x2="0" y2="7" stroke="#9a9a9a" stroke-width="1.3" opacity="0.5"/>
+      </pattern>
+    </defs>
+  </svg>
+  <div id="loading">Carregando o mapa…</div>
+
+  <!-- ===== Barra superior: título, filtro por tag, voltar ao zoom inicial ===== -->
+  <header id="topbar">
+    <div class="brand">
+      <strong>Europa 2027</strong>
+      <span>planejador de viagem</span>
+    </div>
+    <div id="tags" class="chips" role="group" aria-label="Filtrar pontos por tag"></div>
+    <button id="btn-home" class="btn pill" type="button" title="Voltar ao zoom inicial (Esc)">Ver Europa inteira</button>
+  </header>
+
+  <!-- ===== Painel lateral (gaveta inferior no celular) ===== -->
+  <aside id="sidebar" aria-label="Planejamento">
+    <header id="summary">
+      <button class="drawer-handle" type="button" data-act="drawer" aria-label="Abrir ou fechar o painel"><i></i></button>
+      <div class="sum-top">
+        <div>
+          <span class="sum-label">Total da viagem</span>
+          <strong id="sum-total">R$ 0</strong>
+        </div>
+        <div class="sum-right">
+          <span id="sum-pct">0%</span>
+          <span class="sum-of">de <span id="sum-budget">R$ 0</span></span>
+        </div>
+      </div>
+      <div class="progress" aria-hidden="true"><div id="sum-bar"></div></div>
+      <button class="sum-toggle" type="button" data-act="sum-toggle" aria-expanded="false">Subtotais por cidade e categoria <span>▾</span></button>
+      <div id="sum-details" hidden></div>
+    </header>
+
+    <div class="sb-main">
+      <div class="sb-scroll">
+        <nav class="tabs" role="tablist">
+          <button type="button" role="tab" data-act="tab" data-tab="roteiro">Meu roteiro</button>
+          <button type="button" role="tab" data-act="tab" data-tab="orcamento">Orçamento</button>
+          <button type="button" role="tab" data-act="tab" data-tab="dados">Dados</button>
+        </nav>
+        <div id="views"></div>
+        <section id="compare" aria-label="Comparativo trem × avião"></section>
+      </div>
+      <!-- detalhes da cidade / ponto (desliza por cima das abas) -->
+      <div id="detail" aria-live="polite"></div>
+    </div>
+  </aside>
+
+  <!-- ===== Linha do tempo e legenda ===== -->
+  <div id="timeline" aria-label="Linha do tempo da viagem"></div>
+  <div id="legend"></div>
+
+  <!-- ===== Elementos flutuantes ===== -->
+  <div id="hovercard" aria-hidden="true"></div>
+  <div id="tip" aria-hidden="true"></div>
+  <div id="toast" role="status"></div>
+  <input type="file" id="file-import" accept="application/json,.json" hidden>
+
+  <!-- Bibliotecas (CDN, versões fixas) -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+
+  <!-- App (scripts comuns, sem módulos: funciona em file:// e no GitHub Pages) -->
+  <script src="js/data.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
