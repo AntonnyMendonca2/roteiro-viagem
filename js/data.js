@@ -60,6 +60,7 @@ window.DATA = {
     id: 'vcp',
     nome: 'Campinas – VCP',
     nomeCurto: 'Campinas (VCP)',
+    lat: -23.0074, lon: -47.1345,   // usado na rota inteligente sem pontas fixas
     wiki: 'Viracopos International Airport',
     viaIda: 'lisboa',      // a ida é desenhada passando por esta cidade
     voos: {

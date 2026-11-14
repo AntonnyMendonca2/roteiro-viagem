@@ -68,7 +68,8 @@
       iof: !!D.config.iof,
       cambio: clone(D.cambio),
       cities: {}, pois: {}, legs: {}, gerais: {},
-      tag: null
+      tag: null,
+      otim: { auto: true, criterio: 'tempo', fixarPontas: true }   // rota inteligente
     };
     D.cities.forEach(c => {
       const custos = {};
@@ -113,6 +114,8 @@
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.dataSaida || '')) s.dataSaida = D.config.dataSaida;
     D.cities.forEach(c => { s.cities[c.id].noites = Math.max(1, Math.min(60, Math.round(num(s.cities[c.id].noites)) || 1)); });
     if (s.tag && D.tags.indexOf(s.tag) < 0) s.tag = null;
+    if (!App.CRITERIOS[s.otim.criterio]) s.otim.criterio = 'tempo';
+    s.otim.auto = !!s.otim.auto; s.otim.fixarPontas = !!s.otim.fixarPontas;
     return s;
   }
 
@@ -162,8 +165,8 @@
     return via;
   }
 
-  // Monta um trecho entre dois pontos da rota ('vcp' = Viracopos).
-  function resolveLeg(from, to) {
+  // Definição de um trecho entre dois pontos da rota ('vcp' = Viracopos), sem tocar no estado.
+  function legDef(from, to) {
     let key, def, intl = false, est = false;
     if (from === 'vcp' || to === 'vcp') {
       intl = true;
@@ -179,6 +182,12 @@
       def = D.legs.find(l => (l.a === from && l.b === to) || (l.a === to && l.b === from));
       if (!def) { est = true; def = estimar(from, to); }
     }
+    return { key, def, intl, est };
+  }
+
+  // Monta um trecho da rota (definição + estado do usuário).
+  function resolveLeg(from, to) {
+    const { key, def, intl, est } = legDef(from, to);
 
     // estado do trecho (criado na primeira vez que o par aparece na rota)
     const S = App.state;
@@ -221,6 +230,93 @@
     }
     return { transporte, pernoite, noites, horas: o.horas, real: temReal };
   }
+
+  /* ============================================================================
+     ROTA INTELIGENTE — problema do caixeiro-viajante (TSP)
+
+     Procura a ordem das cidades que minimiza o tempo, o custo ou a distância
+     total. Com até ~12 cidades dá para resolver de forma EXATA com programação
+     dinâmica (algoritmo de Held-Karp, O(n²·2ⁿ)) em poucos milissegundos.
+
+     Pontas da rota: por padrão a 1ª e a última cidade ficam fixas (chegada e
+     saída dos voos internacionais) e só o "miolo" é reordenado. Sem pontas
+     fixas, a rota começa e termina em Viracopos.
+     ========================================================================== */
+  App.CRITERIOS = { tempo: 'Menor tempo', custo: 'Menor custo', distancia: 'Menor distância' };
+  const pontoDe = id => (id === 'vcp' ? D.origem : cityById[id]);
+
+  // Custo de ir de "from" até "to" segundo o critério (usa o modo trem/avião escolhido no trecho).
+  function pairCost(from, to, crit) {
+    const km = distKm(pontoDe(from), pontoDe(to));
+    if (crit === 'distancia') return km;
+    // voo intercontinental: preço informado à parte; o tempo pesa só pela distância
+    if (from === 'vcp' || to === 'vcp') return crit === 'tempo' ? km / 800 : 0;
+
+    const { key, def } = legDef(from, to);
+    const st = App.state.legs[key];
+    let modo = st && def[st.modo] ? st.modo : def.padrao;
+    if (!def[modo]) modo = def.trem ? 'trem' : 'aviao';
+    const o = def[modo];
+    if (crit === 'tempo') return (o.h[0] + o.h[o.h.length - 1]) / 2 + (modo === 'aviao' ? D.estimativa.aviaoExtraH : 0);
+
+    const real = st && st.modo === modo && st.real && st.real.v !== '' && st.real.v != null;
+    let brl = real ? App.toBRL(st.real.v, st.real.cur) : App.toBRL((o.eur[0] + o.eur[1]) / 2, 'EUR');
+    if (o.pernoite && (!st || st.pernoite !== false)) {
+      const h = st && isObj(st.hospedagem) ? st.hospedagem : D.config.hospedagemPernoite;
+      brl += App.toBRL(h.v, h.cur);
+    }
+    return brl;
+  }
+
+  // Custo total de Viracopos → cidades (na ordem) → Viracopos.
+  function routeCost(ids, crit) {
+    const seq = ['vcp'].concat(ids, ['vcp']);
+    let t = 0;
+    for (let i = 0; i < seq.length - 1; i++) t += pairCost(seq[i], seq[i + 1], crit);
+    return t;
+  }
+
+  // Held-Karp: melhor ordem para visitar "mid", saindo de "first" e chegando em "last".
+  function heldKarp(mid, first, last, crit) {
+    const n = mid.length;
+    if (n <= 1) return mid.slice();
+    const C = mid.map(a => mid.map(b => (a === b ? 0 : pairCost(a, b, crit))));
+    const ini = mid.map(b => pairCost(first, b, crit)), fim = mid.map(a => pairCost(a, last, crit));
+    const N = 1 << n;
+    const dp = new Float64Array(N * n).fill(Infinity), pai = new Int8Array(N * n).fill(-1);
+    for (let j = 0; j < n; j++) dp[(1 << j) * n + j] = ini[j];
+    for (let mask = 1; mask < N; mask++) {
+      for (let j = 0; j < n; j++) {
+        const v = dp[mask * n + j];
+        if (!(mask & (1 << j)) || v === Infinity) continue;
+        for (let k = 0; k < n; k++) {
+          if (mask & (1 << k)) continue;
+          const nm = mask | (1 << k), w = v + C[j][k];
+          if (w < dp[nm * n + k]) { dp[nm * n + k] = w; pai[nm * n + k] = j; }
+        }
+      }
+    }
+    let best = Infinity, j = -1;
+    for (let k = 0; k < n; k++) {
+      const w = dp[(N - 1) * n + k] + fim[k];
+      if (w < best - 1e-9) { best = w; j = k; }
+    }
+    const ordem = [];
+    for (let mask = N - 1; j >= 0;) { ordem.push(mid[j]); const p = pai[mask * n + j]; mask &= ~(1 << j); j = p; }
+    return ordem.reverse();
+  }
+
+  // Ordem ótima para "ids". "base" define as pontas fixas (normalmente a ordem atual).
+  App.optimize = function (ids, base) {
+    const S = App.state, crit = S.otim.criterio;
+    if (ids.length < 2) return ids.slice();
+    if (!S.otim.fixarPontas) return heldKarp(ids, 'vcp', 'vcp', crit);
+    base = (base || ids).filter(id => ids.indexOf(id) >= 0);
+    if (base.length < 2) base = ids;
+    if (ids.length <= 2) return base.concat(ids.filter(id => base.indexOf(id) < 0));
+    const first = base[0], last = base[base.length - 1];
+    return [first].concat(heldKarp(ids.filter(id => id !== first && id !== last), first, last, crit), [last]);
+  };
 
   /* --------------------------------------------------- cálculo geral (derivado) */
   function compute() {
@@ -290,7 +386,13 @@
     D.gerais.forEach(g => { cats.gerais += App.toBRL(S.gerais[g.id].v, S.gerais[g.id].cur); });
 
     const total = Object.keys(cats).reduce((a, k) => a + cats[k], 0);
-    return { route, legs, segs, segByCity, cats, cities, cen, total, base: total - cen.meu.brl };
+
+    // rota inteligente: a ordem atual é a ótima? quanto se ganharia?
+    const crit = S.otim.criterio, ideal = App.optimize(route, route);
+    const otim = { crit, ideal, atual: routeCost(route, crit), melhor: routeCost(ideal, crit) };
+    otim.diff = Math.max(0, otim.atual - otim.melhor);
+
+    return { route, legs, segs, segByCity, cats, cities, cen, total, base: total - cen.meu.brl, otim };
   }
 
   /* ------------------------------------------------------ consultas derivadas */
@@ -349,16 +451,58 @@
     o[keys[keys.length - 1]] = value;
   };
 
+  // Inclui uma cidade no roteiro, na melhor posição se a rota inteligente estiver ligada.
+  // Retorna o texto "entre X e Y" para o aviso.
+  function addToRoute(id) {
+    const S = App.state, prev = App.route();
+    S.cities[id].sel = true;
+    const ids = prev.concat([id]);
+    renumber(S.otim.auto ? App.optimize(ids, prev) : ids);
+    const r = App.route(), i = r.indexOf(id);
+    const nome = x => (x ? cityById[x].nome : D.origem.nomeCurto);
+    return 'entre ' + nome(r[i - 1]) + ' e ' + nome(r[i + 1]);
+  }
+
   App.toggleCity = function (id, on) {
     const S = App.state, cs = S.cities[id];
     const sel = on === undefined ? !cs.sel : !!on;
     if (sel === cs.sel) return;
-    const route = App.route();
-    cs.sel = sel;
-    if (sel) { route.push(id); renumber(route); MapView.ignite('city', id); }
-    else renumber(route.filter(x => x !== id));
+    let onde = '';
+    if (sel) { onde = addToRoute(id); MapView.ignite('city', id); }
+    else {
+      cs.sel = false;
+      const r = App.route();
+      renumber(S.otim.auto ? App.optimize(r, r) : r);
+    }
     App.refresh();
-    UI.toast(cityById[id].nome + (sel ? ' entrou no roteiro.' : ' saiu do roteiro.'));
+    UI.toast(cityById[id].nome + (sel ? ' entrou no roteiro, ' + onde + '.' : ' saiu do roteiro.'));
+  };
+
+  // Manual → desliga a otimização automática (senão ela desfaria a ordem escolhida).
+  function manualOrder() {
+    if (!App.state.otim.auto) return;
+    App.state.otim.auto = false;
+    UI.toast('Rota inteligente desligada porque você reordenou à mão. Religue em "Meu roteiro".');
+  }
+
+  // Reordena agora pela melhor rota.
+  App.optimizeNow = function () {
+    const c = App.calc.otim, ganho = c.diff;
+    renumber(App.optimize(App.route(), App.route()));
+    App.refresh();
+    UI.toast(ganho > 0 ? 'Rota otimizada: ' + UI.otimTxt(ganho, c.crit) + ' a menos.' : 'A rota já estava otimizada.');
+  };
+
+  // Muda uma opção da rota inteligente; se estiver ligada, reordena na hora.
+  App.setOtim = function (k, v) {
+    const S = App.state;
+    S.otim[k] = v;
+    if (S.otim.auto) {
+      const antes = App.route().join();
+      renumber(App.optimize(App.route(), App.route()));
+      if (App.route().join() !== antes) UI.toast('Roteiro reordenado: ' + App.CRITERIOS[S.otim.criterio].toLowerCase() + '.');
+    }
+    App.refresh();
   };
 
   App.togglePoi = function (id) {
@@ -369,11 +513,9 @@
       ps.sel = true;
       MapView.ignite('poi', id);
       if (!S.cities[p.cityId].sel) {            // incluir um ponto inclui a cidade dele
-        const route = App.route();
-        S.cities[p.cityId].sel = true;
-        route.push(p.cityId); renumber(route);
+        const onde = addToRoute(p.cityId);
         MapView.ignite('city', p.cityId);
-        UI.toast(cityById[p.cityId].nome + ' entrou no roteiro.');
+        UI.toast(cityById[p.cityId].nome + ' entrou no roteiro, ' + onde + '.');
       }
     }
     App.refresh();
@@ -384,6 +526,7 @@
     if (i < 0 || j < 0 || j >= route.length) return;
     route.splice(i, 1); route.splice(j, 0, id);
     renumber(route);
+    manualOrder();
     App.refresh();
   };
 
@@ -395,6 +538,7 @@
     if (depois) j++;
     route.splice(j, 0, id);
     renumber(route);
+    manualOrder();
     App.refresh();
   };
 

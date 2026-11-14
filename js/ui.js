@@ -192,6 +192,7 @@
         case 'export': App.exportJSON(); break;
         case 'import': els.file.value = ''; els.file.click(); break;
         case 'reset': App.reset(); break;
+        case 'optimize': App.optimizeNow(); break;
         case 'legend': els.legend.classList.toggle('open'); break;
         case 'day': if (id) App.openCity(id); break;
       }
@@ -212,6 +213,7 @@
     // selects, checkboxes e datas
     els.sidebar.addEventListener('change', e => {
       const t = e.target;
+      if (t.dataset.otim) { A().setOtim(t.dataset.otim, t.type === 'checkbox' ? t.checked : t.value); return; }
       if (!t.dataset.path) return;
       if (t.type === 'checkbox') A().set(t.dataset.path, t.checked);
       else if (t.type === 'date') { if (!t.value) return; A().set(t.dataset.path, t.value); }
@@ -415,12 +417,46 @@
     return html + '</li>';
   }
 
+  // Texto de uma diferença no critério da rota inteligente (ex.: "3h10", "R$ 210", "450 km").
+  UI.otimTxt = function (v, crit) {
+    if (crit === 'tempo') return Fmt.horas(v);
+    if (crit === 'custo') return Fmt.brl(v);
+    return Math.round(v).toLocaleString('pt-BR') + ' km';
+  };
+
+  // Quadro "Rota inteligente" (caixeiro-viajante).
+  function smartBox() {
+    const App = A(), o = App.state.otim, c = App.calc.otim, n = App.calc.route.length;
+    const tol = { tempo: 0.05, custo: 1, distancia: 1 }[c.crit];
+    const pode = o.fixarPontas ? n >= 3 : n >= 2;
+    let status = '';
+    if (pode && c.diff > tol) {
+      const nomes = c.ideal.map(id => App.city(id).nome).join(' → ');
+      status = '<div class="sm-warn"><p>A ordem atual tem <b>' + UI.otimTxt(c.diff, c.crit) + ' a mais</b> que a melhor rota:<br><small>' + esc(nomes) + '</small></p>' +
+        '<button type="button" class="btn pill primary" data-act="optimize" data-fid="btn-otim">Otimizar agora</button></div>';
+    } else if (pode) {
+      status = '<p class="sm-ok">✓ Esta é a melhor ordem (' + App.CRITERIOS[c.crit].toLowerCase() + ').</p>';
+    }
+    return '<section class="smart">' +
+      '<div class="sm-head"><label class="check sm-auto"><input type="checkbox" data-otim="auto" data-fid="otim-auto"' + (o.auto ? ' checked' : '') +
+        '><span><b>Rota inteligente</b> <small>reordena sozinha</small></span></label>' +
+        '<select data-otim="criterio" data-fid="otim-crit" aria-label="Critério da rota">' +
+        Object.keys(App.CRITERIOS).map(k => '<option value="' + k + '"' + (k === o.criterio ? ' selected' : '') + '>' + App.CRITERIOS[k] + '</option>').join('') +
+        '</select></div>' +
+      '<label class="check"><input type="checkbox" data-otim="fixarPontas" data-fid="otim-fix"' + (o.fixarPontas ? ' checked' : '') +
+        '><span>Manter a 1ª e a última cidade <small>(chegada e saída dos voos internacionais' +
+        (n >= 2 ? ': ' + esc(App.city(App.calc.route[0]).nome) + ' e ' + esc(App.city(App.calc.route[n - 1]).nome) : '') +
+        '; para trocar, arraste outra cidade para o início ou o fim)</small></span></label>' +
+      status + '</section>';
+  }
+
   function viewRoteiro() {
     const App = A(), S = App.state, c = App.calc;
     const ida = c.segs[0], volta = c.segs[c.segs.length - 1];
     let html = '<div class="field inline"><label for="f-saida">Data de saída</label>' +
       '<input id="f-saida" data-fid="f-saida" type="date" data-full data-path="dataSaida" value="' + esc(S.dataSaida) + '"></div>';
 
+    html += smartBox();
     html += '<ol class="itin">';
     html += '<li class="node">' + icon('aviao') + '<div><b>' + esc(D.origem.nome) + '</b><small>saída ' + Fmt.dow(ida.start) + ', ' + Fmt.data(ida.start) + '</small></div></li>';
     c.route.forEach((id, i) => {

@@ -90,6 +90,12 @@ descartar o que estava salvo no navegador.
   selecionados entram no total.
 - **Meu roteiro:** reordene as cidades arrastando ou com as setas ↑↓, ajuste as noites e escolha
   Trem ou Avião em cada trecho. O campo "Valor real" substitui a estimativa.
+- **Rota inteligente:** ao incluir uma cidade, ela entra na posição que deixa a viagem mais curta
+  (problema do caixeiro-viajante, resolvido de forma exata com o algoritmo de Held-Karp).
+  Critérios: menor tempo (porta a porta, com o modo trem/avião de cada trecho), menor custo ou
+  menor distância. Por padrão a 1ª e a última cidade ficam fixas (chegada e saída dos voos
+  internacionais). Reordenar à mão desliga a otimização automática; o botão "Otimizar agora"
+  mostra quanto a melhor ordem economiza.
 - **Orçamento:** itens gerais, câmbio, IOF e orçamento total.
 - **Esc** ou **Ver Europa inteira** fecha o painel e volta ao zoom inicial.
 
