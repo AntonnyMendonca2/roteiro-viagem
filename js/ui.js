@@ -94,6 +94,17 @@
     });
   };
 
+  /* ======================================== distância do ponto ao centro da cidade */
+  // Linha reta; o tempo a pé considera ~30% de desvio pelas ruas e 4,8 km/h.
+  UI.dist = function (p) {
+    const c = A().city(p.cityId), km = A().distKm(c, p);
+    const txt = '~' + (km < 1 ? Math.max(50, Math.round(km * 20) * 50) + ' m'
+      : (km < 10 ? Math.round(km * 10) / 10 : Math.round(km)).toLocaleString('pt-BR') + ' km');
+    const min = Math.round(km * 1.3 / 4.8 * 60);
+    const ape = km <= 6 ? (min < 60 ? Math.max(1, min) + ' min' : Fmt.horas(min / 60)) + ' a pé' : '';
+    return { km, curto: txt, longo: txt + ' do centro de ' + c.nome + (ape ? ' · ~' + ape : '') };
+  };
+
   /* ============================================================ textos de trecho */
   const nomeDe = id => (id === 'vcp' ? D.origem.nomeCurto : A().city(id).nome);
 
@@ -502,7 +513,7 @@
         '<button type="button" class="chk" data-act="toggle-poi" data-id="' + p.id + '" data-fid="tp-' + p.id + '" aria-pressed="' + on + '" aria-label="' +
         (on ? 'Remover do roteiro' : 'Incluir no roteiro') + '">✓</button>' +
         '<button type="button" class="pr-main" data-act="open-poi" data-id="' + p.id + '"><span class="pr-n">' + esc(p.nome) + (w ? ' <i class="wdot" title="' + esc(w.texto) + '">!</i>' : '') + '</span>' +
-        '<span class="pr-m">' + esc(p.preco.label) + (p.tags.length ? ' · ' + esc(p.tags.join(', ')) : '') + '</span></button></li>';
+        '<span class="pr-m">' + esc(p.preco.label) + ' · ' + esc(UI.dist(p).curto) + (p.tags.length ? ' · ' + esc(p.tags.join(', ')) : '') + '</span></button></li>';
     }).join('') : '<li class="empty">Nenhum ponto com a tag "' + esc(tag) + '" nesta cidade.</li>') + '</ul></div>';
     return html;
   }
@@ -515,6 +526,7 @@
       '<p class="d-meta"><span class="st ' + (on ? 'on' : '') + '">' + (on ? 'Selecionado' : 'Não selecionado') + '</span>' + tagsHtml(p.tags) + '</p>' +
       '<button type="button" class="btn big' + (on ? '' : ' primary') + '" data-act="toggle-poi" data-fid="tpd-' + p.id + '" data-id="' + p.id + '">' +
       (on ? 'Remover do roteiro' : '✓ Incluir no roteiro') + '</button>' +
+      '<p class="dist">' + esc(UI.dist(p).longo) + '</p>' +
       '<p class="desc">' + esc(p.desc) + '</p>';
     if (w) html += '<p class="alert ' + w.nivel + '">' + esc(w.texto) + '</p>';
     (p.avisos || []).forEach(a => { if (!(w && p.fechado && /Fechado/.test(a))) html += '<p class="alert leve">' + esc(a) + '</p>'; });
@@ -534,7 +546,12 @@
         dias.map(d => '<option value="' + App.iso(d) + '"' + (ps.dia === App.iso(d) ? ' selected' : '') + '>' + Fmt.dow(d) + ', ' + Fmt.data(d) + '</option>').join('') +
         '</select></div>';
     }
-    if (p.site) html += '<a class="link" href="' + esc(p.site) + '" target="_blank" rel="noopener noreferrer">Site oficial ↗</a>';
+    // links externos: Google Maps (sem chave de API) e site oficial
+    const ll = p.lat + ',' + p.lon, ext = '" target="_blank" rel="noopener noreferrer">';
+    html += '<div class="links">' +
+      '<a class="btn" href="https://www.google.com/maps/search/?api=1&amp;query=' + ll + ext + 'Ver no Google Maps ↗</a>' +
+      '<a class="btn" href="https://www.google.com/maps/dir/?api=1&amp;destination=' + ll + '&amp;travelmode=transit' + ext + 'Como chegar ↗</a>' +
+      (p.site ? '<a class="btn" href="' + esc(p.site) + ext + 'Site oficial ↗</a>' : '') + '</div>';
     return html + '</div>';
   }
 

@@ -100,4 +100,7 @@ comprar.
 
 - [D3](https://d3js.org) 7.9.0 e [TopoJSON Client](https://github.com/topojson/topojson-client) 3.1.0
 - Contorno dos países: [world-atlas](https://github.com/topojson/world-atlas) 2.0.2 (Natural Earth)
+- Mapa de ruas (ao dar zoom): Esri World Dark Gray Canvas — © Esri, HERE, Garmin, © OpenStreetMap.
+  Não precisa de chave de API. Para trocar a fonte, edite `TILE_URL` em `js/map.js`.
+- Links "Ver no Google Maps" e "Como chegar" abrem o Google Maps (não usam API)
 - Fotos: API REST da Wikipedia · Fonte: Inter (Google Fonts) · Ícones: Material Icons

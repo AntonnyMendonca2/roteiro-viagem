@@ -67,6 +67,21 @@ small { font-weight: 400; color: var(--muted); }
 }
 @keyframes breathe { 50% { opacity: .35; } }
 
+/* mapa de ruas (Esri Dark Gray Canvas): escurecido para combinar com o fundo, mantendo as ruas legíveis */
+.l-tiles { pointer-events: none; filter: grayscale(1) brightness(.8) contrast(1.25); }
+.l-tiles image { image-rendering: auto; }
+
+/* escala e créditos do mapa */
+#mapinfo {
+  position: fixed; right: calc(var(--sidebar-w) + 104px); bottom: calc(var(--timeline-h) + 12px); z-index: 4;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 3px; pointer-events: none;
+}
+#scale { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #cfcfcf; text-shadow: 0 0 3px #000; }
+#scale i { display: block; height: 6px; border: 1.5px solid #cfcfcf; border-top: 0; transition: width .2s; }
+#attrib { font-size: 10px; color: #8a8a8a; display: none; pointer-events: auto; text-shadow: 0 0 3px #000; }
+#attrib.on { display: block; }
+#attrib a { color: inherit; }
+
 /* países */
 .country {
   fill: var(--land); stroke: var(--border); stroke-width: .6px;
@@ -128,6 +143,13 @@ small { font-weight: 400; color: var(--muted); }
 .poi.sel .dot { fill: var(--accent); opacity: 1; filter: drop-shadow(0 0 4px var(--accent)); }
 .lvl-city .poi.sel .pulse { animation: pulse 2.6s ease-out infinite; }
 .lvl-city .poi.off { opacity: .07; pointer-events: none; }
+.poi .plbl {
+  display: none; font-size: 11px; font-weight: 500; fill: #bdbdbd;
+  paint-order: stroke; stroke: rgba(14, 14, 14, .92); stroke-width: 3px; stroke-linejoin: round;
+}
+.lvl-street .poi .plbl { display: block; }
+.poi.sel .plbl, .poi:hover .plbl, .poi.focus .plbl { fill: #fff; font-weight: 600; }
+.poi.focus .plbl { fill: var(--accent); }
 .poi .wbadge { display: none; font-size: 11px; font-weight: 700; fill: #fff; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
 .poi.warn .wbadge { display: block; }
 .poi.warn-forte .wbadge { fill: var(--accent); font-size: 14px; }
@@ -420,6 +442,9 @@ input:focus, select:focus { outline: none; border-color: var(--accent); backgrou
 .alert.leve { background: var(--panel-2); border-left: 3px solid #9a9a9a; color: #dedede; }
 .alert.forte { background: rgba(245, 184, 65, .1); border-left: 3px solid var(--accent); color: #fff; }
 .ref { font-size: 12.5px; color: #bdbdbd; }
+.dist { margin: 14px 0 0; font-size: 12.5px; color: #c4c4c4; padding-left: 10px; border-left: 2px solid var(--accent); }
+.links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.links .btn { font-size: 12.5px; padding: 7px 12px; text-decoration: none; }
 .link { display: inline-block; margin-top: 14px; color: var(--text); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #666; }
 .link:hover { text-decoration-color: var(--accent); }
 
@@ -575,6 +600,8 @@ input:focus, select:focus { outline: none; border-color: var(--accent); backgrou
   #timeline { right: 0; bottom: var(--peek); transition: opacity .25s, visibility .25s; }
   .drawer-open #timeline, .drawer-open #legend { opacity: 0; visibility: hidden; }
   #legend { right: 10px; bottom: calc(var(--peek) + var(--timeline-h) + 8px); transition: opacity .25s, visibility .25s; }
+  #mapinfo { right: 96px; bottom: calc(var(--peek) + var(--timeline-h) + 12px); transition: opacity .25s, visibility .25s; }
+  .drawer-open #mapinfo { opacity: 0; visibility: hidden; }
   #toast { left: 50%; bottom: auto; top: 96px; }
 }
 

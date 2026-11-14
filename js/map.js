@@ -1,7 +1,10 @@
 /* ==========================================================================
-   map.js — mapa D3 (projeção cônica conforme), marcadores, rotas e animações.
+   map.js — mapa D3 (projeção Mercator), marcadores, rotas e animações.
 
-   Camadas (de baixo para cima): países → hachura → rotas → bate-voltas →
+   Ao dar zoom, o mapa simplificado dos países dá lugar a um mapa de ruas
+   (Esri World Dark Gray Canvas, sem chave de API).
+
+   Camadas (de baixo para cima): mapa de ruas → países → hachura → rotas → bate-voltas →
    cidades → pontos → área informativa → ícone em movimento → efeitos.
 
    Os marcadores têm tamanho fixo na tela: cada um recebe scale(1/k) quando o
@@ -15,13 +18,20 @@
   const A = () => window.App;
 
   const WORLD_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-50m.json';
+  // Mapa de ruas: Esri "World Dark Gray Canvas" (monocromático, com nomes de ruas), sem chave de API.
+  // Aparece ao dar zoom; na visão da Europa fica o mapa simplificado dos países.
+  const TILE_URL = (z, x, y) => 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/' + z + '/' + y + '/' + x;
+  const TILE_MAX_Z = 16;       // nível máximo disponível; acima disso as imagens são ampliadas
+  const TILE_FADE = [2.5, 6];  // faixa de zoom (k) em que o mapa de ruas substitui o de países
   // Pontos que definem o enquadramento inicial ("Europa inteira").
   const FRAME = { type: 'MultiPoint', coordinates: [[-16, 36], [-16, 58], [36, 36.5], [36, 58], [10, 59.5], [10, 35.2]] };
   const REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const POI_ZOOM = 4;          // a partir deste zoom os pontos de interesse aparecem
-  const PX_KM_MAX = 70;        // zoom máximo ao enquadrar uma cidade (px por km)
+  const PX_KM_MAX = 90;        // zoom máximo ao enquadrar uma cidade (px por km)
+  const PX_KM_STREET = 380;    // zoom ao abrir um ponto de interesse (px por km ≈ nível de ruas)
 
-  let svg, node, root, hatch;
+  let svg, node, root, hatch, tilesG, scaleEl, attribEl;
+  let tilesCur = [], tilesZ = -1, lingering = [], lingerTimer = null;
   const L = {};
   let projection, geoPath, zoom, T = d3.zoomIdentity;
   let features = null, ready = false, routeSig = null;
@@ -37,14 +47,17 @@
     svg = d3.select('#map');
     node = svg.node();
     hatch = svg.select('#hatch');
+    tilesG = svg.append('g').attr('class', 'l-tiles');      // mapa de ruas (coordenadas de tela)
     root = svg.append('g').attr('class', 'zoom-layer');
+    scaleEl = document.getElementById('scale');
+    attribEl = document.getElementById('attrib');
     ['countries', 'hatch', 'routes', 'trips', 'cities', 'pois', 'info', 'mover', 'fx'].forEach(n => {
       L[n] = root.append('g').attr('class', 'l-' + n);
     });
     card = document.getElementById('hovercard');
     tip = document.getElementById('tip');
 
-    zoom = d3.zoom().scaleExtent([0.7, 6000]).on('zoom', onZoom);
+    zoom = d3.zoom().scaleExtent([0.7, 30000]).on('zoom', onZoom);
     svg.call(zoom).on('dblclick.zoom', null);
     svg.on('click', hideCard);
     window.addEventListener('pointerdown', e => { lastPointer = e.pointerType || 'mouse'; }, true);
@@ -56,7 +69,8 @@
   function layout() {
     const r = A().viewRect(), mobile = A().isMobile(), pad = mobile ? 12 : 30;
     const W = window.innerWidth, H = window.innerHeight;
-    projection = d3.geoConicConformal().parallels([42, 58]).rotate([-10, 0]);
+    // Mercator: a mesma projeção das imagens do mapa de ruas, para tudo se alinhar.
+    projection = d3.geoMercator();
     projection.fitExtent([[r.x0 + pad, r.y0 + pad], [Math.max(r.x0 + pad + 50, r.x1 - pad), Math.max(r.y0 + pad + 50, r.y1 - pad)]], FRAME);
     projection.clipExtent([[-W, -H], [2 * W, 2 * H]]);
     geoPath = d3.geoPath(projection);
@@ -75,6 +89,81 @@
     drawCountries();
     drawMarkers();
     routeSig = null;
+    tilesZ = -1; tilesCur = []; lingering = [];
+    tilesG.selectAll('image').remove();
+    mapLayers();
+  }
+
+  /* ============================================ mapa de ruas (tiles) e escala */
+  // Troca suave: países (zoom afastado) ↔ mapa de ruas (zoom próximo).
+  function mapLayers() {
+    const f = Math.max(0, Math.min(1, (T.k - TILE_FADE[0]) / (TILE_FADE[1] - TILE_FADE[0])));
+    L.countries.style('opacity', 1 - f);
+    L.hatch.style('opacity', 1 - f * 0.6);
+    tilesG.style('opacity', f);
+    if (attribEl) attribEl.classList.toggle('on', f > 0);
+    renderTiles(f > 0);
+    renderScale();
+  }
+
+  function renderTiles(on) {
+    if (!on) {
+      if (tilesCur.length || lingering.length) { tilesG.selectAll('image').remove(); tilesCur = []; lingering = []; tilesZ = -1; }
+      return;
+    }
+    const W = window.innerWidth, H = window.innerHeight;
+    const t = projection.translate();
+    const world = 2 * Math.PI * projection.scale() * T.k;         // largura do mundo em px
+    const x0 = T.x + T.k * t[0] - world / 2, y0 = T.y + T.k * t[1] - world / 2;
+    const z = Math.max(0, Math.min(TILE_MAX_Z, Math.round(Math.log2(world / 256))));
+    const n = 1 << z, ts = world / n;
+
+    // ao mudar de nível, as imagens antigas ficam por baixo até as novas carregarem
+    if (z !== tilesZ) {
+      const now = performance.now();
+      lingering = lingering.filter(d => d.until > now && d.z !== z)
+        .concat(tilesCur.map(d => Object.assign({}, d, { until: now + 900, old: true })));
+      tilesZ = z;
+      clearTimeout(lingerTimer);
+      lingerTimer = setTimeout(() => { lingering = []; renderTiles(T.k > TILE_FADE[0]); }, 950);
+    }
+
+    tilesCur = [];
+    const ix0 = Math.floor(-x0 / ts), ix1 = Math.floor((W - x0) / ts);
+    const iy0 = Math.max(0, Math.floor(-y0 / ts)), iy1 = Math.min(n - 1, Math.floor((H - y0) / ts));
+    for (let y = iy0; y <= iy1; y++) {
+      for (let x = ix0; x <= ix1; x++) {
+        const wx = ((x % n) + n) % n;
+        tilesCur.push({ key: z + '/' + x + '/' + y, z, x, y, url: TILE_URL(z, wx, y) });
+      }
+    }
+    const pos = d => { const s = world / (1 << d.z); return [x0 + d.x * s, y0 + d.y * s, s]; };
+    tilesG.selectAll('image').data(lingering.concat(tilesCur), d => d.key)
+      .join(enter => enter.append('image').attr('preserveAspectRatio', 'none').attr('href', d => d.url))
+      .each(function (d) {
+        const p = pos(d);
+        this.setAttribute('x', p[0]); this.setAttribute('y', p[1]);
+        this.setAttribute('width', p[2] + 0.6); this.setAttribute('height', p[2] + 0.6);
+      })
+      .order();
+  }
+
+  // px por km (com zoom 1) numa latitude — no Mercator a escala muda com a latitude.
+  function localPxKm(lat) {
+    return projection.scale() * 1000 / (6371000 * Math.cos(lat * Math.PI / 180));
+  }
+
+  // Barra de escala (ex.: "500 m"), medida no centro da área visível.
+  function renderScale() {
+    if (!scaleEl) return;
+    const r = A().viewRect();
+    const ll = projection.invert([((r.x0 + r.x1) / 2 - T.x) / T.k, ((r.y0 + r.y1) / 2 - T.y) / T.k]);
+    if (!ll || !isFinite(ll[1])) return;
+    const pxKm = projection.scale() * T.k * 1000 / (6371000 * Math.cos(ll[1] * Math.PI / 180));
+    const maxKm = 110 / pxKm, pow = Math.pow(10, Math.floor(Math.log10(maxKm)));
+    const km = [5, 2, 1].map(m => m * pow).find(v => v <= maxKm) || pow;
+    scaleEl.querySelector('i').style.width = (km * pxKm).toFixed(1) + 'px';
+    scaleEl.querySelector('span').textContent = km >= 1 ? km.toLocaleString('pt-BR') + ' km' : Math.round(km * 1000) + ' m';
   }
 
   const cityPt = id => (id === 'vcp' ? vcp : cityPts.find(c => c.id === id));
@@ -167,6 +256,8 @@
       g.append('circle').attr('class', 'pulse').attr('r', 5);
       g.append('circle').attr('class', 'dot').attr('r', 4.5);
       g.append('text').attr('class', 'wbadge').attr('x', 6).attr('y', -5).text('!');
+      // nome do ponto (só aparece no nível das ruas)
+      g.append('text').attr('class', 'plbl').attr('x', 9).attr('y', 4).text(d => d.p.nome.replace(/\s*\(.*\)\s*/g, ' ').trim());
       g.append('circle').attr('class', 'hit').attr('r', 11);
       bindPoint(g, 'poi');
       return g;
@@ -214,7 +305,7 @@
     }
     if (type === 'poi') {
       const p = d.p, on = App.poiActive(p.id), w = App.poiWarn(p);
-      return { nome: p.nome, wiki: p.wiki, preco: p.preco.label, status: on ? 'Selecionado' : 'Não selecionado', on, aviso: w ? w.texto : '' };
+      return { nome: p.nome, wiki: p.wiki, preco: p.preco.label + ' · ' + window.UI.dist(p).curto, status: on ? 'Selecionado' : 'Não selecionado', on, aviso: w ? w.texto : '' };
     }
     if (type === 'info') return { nome: d.i.nome, wiki: d.i.wiki, preco: 'Somente informativo', status: 'Não selecionável', on: false, aviso: d.i.aviso };
     return { nome: D.origem.nome, wiki: D.origem.wiki, preco: 'Aeroporto de Viracopos', status: 'Origem e destino', on: true };
@@ -345,7 +436,7 @@
     let cur = -1;
     const frame = now => {
       if (mover !== me) return;
-      const e = (now - t0) / per, i = Math.floor(e) % segs.length, f = e - Math.floor(e);
+      const e = Math.max(0, now - t0) / per, i =Math.floor(e) % segs.length, f = e - Math.floor(e);
       const s = segs[i], len = lens[i], l = f * len;
       const p = s.el.getPointAtLength(l);
       if (cur !== i) { cur = i; ic.attr('d', window.ICONS[s.modo]); }
@@ -421,8 +512,10 @@
     root.attr('transform', T);
     node.style.setProperty('--k', T.k);
     hatch.attr('patternTransform', 'rotate(45) scale(' + (1 / T.k) + ')');
+    mapLayers();
     place(root.selectAll('.mk'));
     node.classList.toggle('lvl-city', T.k >= POI_ZOOM);
+    node.classList.toggle('lvl-street', T.k * pxKm >= 140);    // nomes dos pontos a partir de ~140 px/km
     document.body.classList.toggle('zoomed', T.k > 1.03 || Math.abs(T.x) > 3 || Math.abs(T.y) > 3);
     hideCard();
     hideTip();
@@ -454,12 +547,9 @@
   M.showPoi = function (id) {
     const d = poiPts.find(p => p.id === id);
     if (!d) return;
-    const r = A().viewRect(), sx = T.x + d.x * T.k, sy = T.y + d.y * T.k, m = 40;
-    if (T.k < POI_ZOOM) {
-      fitPoints([cityPt(d.p.cityId), d].concat(poiPts.filter(o => o.p.cityId === d.p.cityId && !o.p.bateVolta)));
-    } else if (sx < r.x0 + m || sx > r.x1 - m || sy < r.y0 + m || sy > r.y1 - m) {
-      go(T.k, d.x, d.y, 600);
-    }
+    // aproxima até o nível das ruas (~1,5 km de largura visível), centralizado no ponto
+    const kRua = PX_KM_STREET / localPxKm(d.p.lat);
+    go(Math.max(T.k, kRua), d.x, d.y, 900);
     M.update();
   };
 

@@ -33,6 +33,7 @@
   const num = x => { const n = parseFloat(x); return isFinite(n) ? n : 0; };
   const clone = x => JSON.parse(JSON.stringify(x));
   App.num = num;
+  App.distKm = (a, b) => distKm(a, b);   // distância em linha reta (km) entre dois {lat, lon}
 
   // Datas sempre em UTC ao meio-dia, para não sofrer com fuso/horário de verão.
   App.parseDate = function (iso) {
