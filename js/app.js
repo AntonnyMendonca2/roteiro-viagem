@@ -479,9 +479,27 @@
 
   /* --------------------------------------------------------------- atualização */
   // modo 'light': só números (não recria formulários, para não perder o foco ao digitar).
-  App.refresh = function (modo) {
-    save();
+  // Margem para considerar uma ordem "melhor" (evita reordenar por diferenças desprezíveis).
+  App.OTIM_TOL = { tempo: 0.05, custo: 1, distancia: 1 };
+
+  // Recalcula tudo. Com a rota inteligente ligada, mantém o roteiro SEMPRE na melhor
+  // ordem: se algo mudou (estimativas, trem/avião, valores reais...), reordena.
+  function computeAuto() {
     App.calc = compute();
+    const o = App.calc.otim;
+    if (!App.state.otim.auto || o.diff <= App.OTIM_TOL[o.crit] || o.ideal.join() === App.calc.route.join()) return 0;
+    renumber(o.ideal);
+    App.calc = compute();
+    return o.diff;
+  }
+
+  App.refresh = function (modo) {
+    const crit = App.state.otim.criterio, ganho = computeAuto();
+    save();
+    if (ganho) {
+      modo = undefined;   // a ordem mudou: redesenha tudo
+      UI.toast('Roteiro reordenado para a melhor rota: ' + UI.otimTxt(ganho, crit) + ' a menos.');
+    }
     if (modo === 'light') UI.renderLight(); else UI.renderAll();
     MapView.update();
   };
@@ -678,13 +696,17 @@
   /* ------------------------------------------------------------ inicialização */
   function init() {
     App.state = load();
-    App.calc = compute();
+    const ganhoInicial = computeAuto();   // ordem salva ficou desatualizada? já abre otimizada
 
     UI.init();          // monta a interface (o mapa precisa dela para saber a área livre)
     UI.renderAll();
     MapView.init();
     MapView.update();
     MapView.loadWorld();
+    if (ganhoInicial) {
+      save();
+      UI.toast('Roteiro reordenado para a melhor rota: ' + UI.otimTxt(ganhoInicial, App.state.otim.criterio) + ' a menos.');
+    }
 
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape') return;

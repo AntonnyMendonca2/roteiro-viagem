@@ -427,7 +427,7 @@
   // Quadro "Rota inteligente" (caixeiro-viajante).
   function smartBox() {
     const App = A(), o = App.state.otim, c = App.calc.otim, n = App.calc.route.length;
-    const tol = { tempo: 0.05, custo: 1, distancia: 1 }[c.crit];
+    const tol = App.OTIM_TOL[c.crit];
     const pode = o.fixarPontas ? n >= 3 : n >= 2;
     let status = '';
     if (pode && c.diff > tol) {
