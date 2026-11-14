@@ -374,7 +374,7 @@
     const legPaths = (leg, modo, active) => {
       const o = leg.opts[modo];
       const pts = [cityPt(leg.from)];
-      if (o.via) pts.push(viaPt(o.via));
+      o.vias.forEach(v => pts.push(viaPt(v)));
       pts.push(cityPt(leg.to));
       for (let i = 0; i < pts.length - 1; i++) {
         const geo = arc(pts[i], pts[i + 1], modo);
@@ -391,12 +391,12 @@
           place(b);
         }
       }
-      if (active && o.via) {                       // parada intermediária (ex.: Berlim, Milão)
-        const s = gMk.append('g').attr('class', 'mk stop').datum(viaPt(o.via));
-        s.append('circle').attr('r', o.via.cityId ? 9 : 4);
-        if (!o.via.cityId) s.append('text').attr('x', 8).attr('y', 4).text(o.via.nome + ' (parada)');
+      if (active) o.vias.forEach(v => {            // paradas intermediárias (ex.: Berlim, Milão, Paris)
+        const s = gMk.append('g').attr('class', 'mk stop').datum(viaPt(v));
+        s.append('circle').attr('r', v.cityId ? 9 : 4);
+        if (!v.cityId) s.append('text').attr('x', 8).attr('y', 4).text(v.nome + ' (parada)');
         place(s);
-      }
+      });
     };
 
     legs.forEach(leg => {                          // alternativa (modo não escolhido) por baixo

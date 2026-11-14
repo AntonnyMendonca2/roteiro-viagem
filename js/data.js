@@ -76,6 +76,7 @@ window.DATA = {
      rotulo: posição do nome no mapa (n, s, e, w) · paisIso: código ISO numérico */
   cities: [
     { id: 'londres',    nome: 'Londres',    pais: 'Reino Unido', paisIso: 826, lat: 51.5074, lon: -0.1278, moeda: 'GBP', wiki: 'London',     selecionada: true,  noites: 3, ordem: 1, rotulo: 'w',
+      tremSoListado: true,   // de trem, só sai pelo Eurostar: pares não listados passam por Paris
       nota: 'O Reino Unido não devolve imposto (tax free) para turistas. Brasileiros precisam da ETA para entrar.' },
     { id: 'paris',      nome: 'Paris',      pais: 'França',      paisIso: 250, lat: 48.8566, lon: 2.3522,  moeda: 'EUR', wiki: 'Paris',      selecionada: true,  noites: 4, ordem: 2, rotulo: 'w',
       nota: 'Devolução de imposto (détaxe) de ~10–12% em compras acima de €100 na mesma loja e no mesmo dia.' },

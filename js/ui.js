@@ -406,7 +406,7 @@
     html += '<p class="leg-info">' + esc(tx.desc) + ' · ' + esc(tx.tempo) + (o.eur ? ' · ' + Fmt.faixaEur(o.eur) : '') +
       ' <b data-out="leg-cost:' + key + '"></b></p>';
     if (!dois && !leg.intl) html += '<p class="warn-line">' + esc(leg.aviso || (leg.opts.trem ? 'Somente trem neste trecho.' : 'Sem trem viável neste trecho — somente avião.')) + '</p>';
-    if (o.via && !o.pernoite) html += '<p class="leg-via">Parada em ' + esc(o.via.nome) + '</p>';
+    if (o.vias.length && !o.pernoite) html += '<p class="leg-via">' + (o.vias.length > 1 ? 'Paradas em ' : 'Parada em ') + esc(o.vias.map(v => v.nome).join(', ')) + '</p>';
     if (o.pernoite && o.via) {
       html += '<label class="check"><input type="checkbox" data-full data-fid="pn-' + key + '" data-path="legs.' + key + '.pernoite"' + (leg.st.pernoite ? ' checked' : '') +
         '><span>Pernoitar em ' + esc(o.via.nome) + ' <small>(+1 noite)</small></span></label>';

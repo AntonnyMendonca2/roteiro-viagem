@@ -145,17 +145,63 @@
   }
 
   // Estimativa automática para pares de cidades que não estão na tabela de trechos.
+  // Caminho de trem mais rápido usando só os trechos da tabela (Dijkstra).
+  // Ex.: Londres → Zurique = Eurostar até Paris + TGV Lyria.
+  const BALDEACAO_H = 0.5;   // tempo de troca de trem em cada parada
+  const midH = o => (o.h[0] + o.h[o.h.length - 1]) / 2;
+
+  function trainPath(from, to) {
+    const dist = {}, prev = {}, edge = {}, done = {};
+    D.cities.forEach(c => { dist[c.id] = Infinity; });
+    dist[from] = 0;
+    for (;;) {
+      let u = null;
+      D.cities.forEach(c => { if (!done[c.id] && dist[c.id] < Infinity && (u === null || dist[c.id] < dist[u])) u = c.id; });
+      if (u === null || u === to) break;
+      done[u] = true;
+      D.legs.forEach(l => {
+        if (!l.trem || (l.a !== u && l.b !== u)) return;
+        const v = l.a === u ? l.b : l.a, w = dist[u] + midH(l.trem) + BALDEACAO_H;
+        if (w < dist[v]) { dist[v] = w; prev[v] = u; edge[v] = l; }
+      });
+    }
+    if (dist[to] === Infinity) return null;
+    const ids = [to], legs = [];
+    for (let x = to; x !== from; x = prev[x]) { ids.unshift(prev[x]); legs.unshift(edge[x]); }
+    const vias = [];
+    legs.forEach((l, i) => {
+      if (l.trem.via) vias.push(l.trem.via);
+      if (i < legs.length - 1) vias.push({ cityId: ids[i + 1] });
+    });
+    const h = legs.reduce((s, l) => s + midH(l.trem), 0) + BALDEACAO_H * (legs.length - 1);
+    return {
+      desc: legs.map(l => l.trem.desc).join(' + '),
+      h: [h, h],
+      eur: [legs.reduce((s, l) => s + l.trem.eur[0], 0), legs.reduce((s, l) => s + l.trem.eur[1], 0)],
+      vias
+    };
+  }
+
+  // Estimativa para pares que não estão na tabela de trechos.
   function estimar(from, to) {
     const E = D.estimativa, a = cityById[from], b = cityById[to];
     const km = distKm(a, b);
-    const tremH = km / E.tremKmh + E.tremExtraH;
-    const tremEur = Math.max(E.tremEurMin, km * E.tremEurPorKm);
     const semTrem = a.semTrem || b.semTrem;
+    let trem = null;
+    if (!semTrem) {
+      const h = km / E.tremKmh + E.tremExtraH, eur = Math.max(E.tremEurMin, km * E.tremEurPorKm);
+      const direto = { desc: 'Trem (~' + Math.round(km) + ' km)', h: [h, h], eur: [Math.round(eur * 0.7 / 5) * 5, Math.round(eur * 1.3 / 5) * 5] };
+      const rede = trainPath(from, to);
+      // cidade que só sai de trem pelos trechos da tabela (ex.: Londres → Eurostar): usa a rede, sempre.
+      // nas demais, a rede vale se não for muito mais lenta que a linha reta (que é otimista).
+      if (a.tremSoListado || b.tremSoListado) trem = rede;
+      else trem = rede && rede.h[0] <= direto.h[0] * 1.2 ? rede : direto;
+    }
     return {
-      padrao: semTrem || tremH > 9 ? 'aviao' : 'trem',
-      trem: semTrem ? null : { desc: 'Trem (~' + Math.round(km) + ' km)', h: [tremH, tremH], eur: [Math.round(tremEur * 0.7 / 5) * 5, Math.round(tremEur * 1.3 / 5) * 5] },
+      padrao: !trem || trem.h[0] > 9 ? 'aviao' : 'trem',
+      trem,
       aviao: { desc: 'Voo (~' + Math.round(km) + ' km)', h: [km / E.aviaoKmh, km / E.aviaoKmh], eur: E.aviaoEur.slice() },
-      aviso: semTrem ? 'Sem trem viável neste trecho — somente avião.' : ''
+      aviso: trem ? '' : 'Sem trem viável neste trecho — somente avião.'
     };
   }
 
@@ -211,6 +257,7 @@
         eur: o.eur || null,
         eurMid: o.eur ? (o.eur[0] + o.eur[1]) / 2 : 0,
         via: viaInfo(o.via),
+        vias: (o.vias || (o.via ? [o.via] : [])).map(viaInfo),     // paradas no caminho (mapa)
         pernoite: !!o.pernoite
       };
     });
