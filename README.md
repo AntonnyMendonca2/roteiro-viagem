@@ -61,6 +61,8 @@ js/data-pontos-*.js  pontos de interesse das cidades novas (e reforço das antig
 js/net.js       chamadas a APIs externas: cache no navegador (com validade) e filas por serviço
 js/cambio.js    câmbio automático (Frankfurter/BCE), spread e mini-gráficos de 90 dias
 js/clima.js     clima típico nas datas, previsão, nascer/pôr do sol e lista "o que levar"
+js/wiki.js      consultas à Wikipedia (lugares próximos, busca, popularidade) e filtros
+js/trilhos.js   traçado real dos trens, horários reais e paisagens no caminho
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -136,6 +138,15 @@ descartar o que estava salvo no navegador.
   chance de chuva e de neve, horas de luz e pôr do sol). São médias dos últimos 10 anos; quando a
   data está a até 16 dias, entra a previsão real. A aba Orçamento ganha a lista **O que levar**,
   gerada pelas mínimas da viagem, como sugestão para o item "Roupas de frio".
+- **Trens de verdade:** os trechos de trem seguem o traçado real da ferrovia (a animação e o
+  ícone também). No cartão do trecho, **Ver horários reais** traz as 3 melhores opções (horário,
+  duração, baldeações, nome do trem), o link da operadora e o botão **Usar esta duração**, que
+  substitui a estimativa da tabela. Para datas ainda sem horário publicado, o app consulta o
+  mesmo dia da semana numa data próxima e mostra como "horário de referência".
+  **Paisagens no caminho** lista castelos, lagos, vales e afins por onde o trem passa, em ordem,
+  com o lado da janela, o horário aproximado e a sugestão de onde sentar; no mapa elas aparecem
+  como pontinhos ao longo da linha (fotos com o zoom próximo). Em **Dados → Pré-carregar rotas
+  dos trens** dá para guardar todos os traçados para uso sem internet.
 - **Esc** ou **Ver Europa inteira** fecha o painel e volta ao zoom inicial.
 
 Os preços e tempos são aproximados e servem de referência — confira nos sites oficiais antes de
@@ -151,6 +162,9 @@ guardado ou mostra um aviso discreto. Nenhuma chave de API fica no código do si
 |---|---|---|
 | Câmbio do dia e histórico de 90 dias | [Frankfurter](https://frankfurter.dev) (Banco Central Europeu) | 12 h |
 | Clima histórico (10 anos) e previsão de 16 dias | [Open-Meteo](https://open-meteo.com) | 30 dias / 3 h |
+| Traçado das ferrovias | [OpenRailRouting](https://routing.openrailrouting.org) (servidor comunitário: 1 requisição por vez) | 1 ano |
+| Horários reais de trem | [Transitous](https://transitous.org) | 24 h |
+| Fotos, lugares próximos e popularidade | Wikipedia / Wikimedia | 30 dias |
 
 ## Testes
 

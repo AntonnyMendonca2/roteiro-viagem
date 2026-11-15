@@ -31,6 +31,7 @@
   const PX_KM_MAX = 90;        // zoom máximo ao enquadrar uma cidade (px por km)
   const PX_KM_STREET = 380;    // zoom ao abrir um ponto de interesse (px por km ≈ nível de ruas)
   const TH_R = 21;             // raio (px) do círculo com foto dos pontos da cidade aberta
+  const CENA_R = 15;           // raio (px) da foto das paisagens no caminho do trem
 
   let svg, node, root, hatch, tilesG, scaleEl, attribEl;
   let tilesCur = [], tilesZ = -1, lingering = [], lingerTimer = null;
@@ -56,9 +57,10 @@
     root = svg.append('g').attr('class', 'zoom-layer');
     // recorte circular das fotos dos pontos
     svg.select('defs').append('clipPath').attr('id', 'thumb-clip').append('circle').attr('r', TH_R);
+    svg.select('defs').append('clipPath').attr('id', 'cena-clip').append('circle').attr('r', CENA_R);
     scaleEl = document.getElementById('scale');
     attribEl = document.getElementById('attrib');
-    ['countries', 'hatch', 'routes', 'trips', 'cities', 'pois', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
+    ['countries', 'hatch', 'routes', 'trips', 'cenas', 'cities', 'pois', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
       L[n] = root.append('g').attr('class', 'l-' + n);
     });
     card = document.getElementById('hovercard');
@@ -403,6 +405,7 @@
         if (pickCb) return;                         // marcando hospedagem: o clique é do mapa
         e.stopPropagation();
         ripple(d);
+        if (type === 'cena') { showCard(type, d); clearTimeout(cardTimer); cardTimer = setTimeout(hideCard, 4000); return; }
         if (type === 'city') A().openCity(d.id);
         else if (type === 'hosp') A().openCity(d.cityId);
         else if (type === 'poi') A().openPoi(d.id);
@@ -432,6 +435,7 @@
       const c = A().city(d.cityId);
       return { nome: d.h.nome || 'Minha hospedagem', wiki: '', preco: c.nome, status: 'Hospedagem', on: true };
     }
+    if (type === 'cena') return { nome: d.nome, foto: d.foto, preco: 'Paisagem no caminho do trem', status: d.lado === 'dir' ? 'Janela direita' : 'Janela esquerda', on: false, aviso: d.desc };
     if (type === 'info') return { nome: d.i.nome, wiki: d.i.wiki, preco: 'Somente informativo', status: 'Não selecionável', on: false, aviso: d.i.aviso };
     return { nome: D.origem.nome, wiki: D.origem.wiki, preco: 'Aeroporto de Viracopos', status: 'Origem e destino', on: true };
   }
@@ -439,7 +443,7 @@
   function showCard(type, d) {
     const i = describe(type, d);
     clearTimeout(cardTimer);
-    card.innerHTML = (i.wiki ? window.UI.photo(i.wiki, i.nome) : '') +
+    card.innerHTML = (i.foto ? window.UI.photoUrl(i.foto, i.nome) : i.wiki ? window.UI.photo(i.wiki, i.nome) : '') +
       '<div class="hc-body"><div class="hc-name">' + esc(i.nome) + '</div>' +
       '<div class="hc-meta"><span>' + esc(i.preco) + '</span><span class="st ' + (i.on ? 'on' : '') + '">' + esc(i.status) + '</span></div>' +
       (i.aviso ? '<div class="hc-warn">' + esc(i.aviso) + '</div>' : '') + '</div>';
@@ -496,14 +500,11 @@
     const legs = A().calc.legs, segs = [];
     const gAlt = L.routes.append('g'), gAct = L.routes.append('g'), gHit = L.routes.append('g'), gMk = L.routes.append('g');
 
-    const legPaths = (leg, modo, active) => {
-      const o = leg.opts[modo];
-      const pts = [cityPt(leg.from)];
-      o.vias.forEach(v => pts.push(viaPt(v)));
-      pts.push(cityPt(leg.to));
-      for (let i = 0; i < pts.length - 1; i++) {
-        const geo = arc(pts[i], pts[i + 1], modo);
-        const p = (active ? gAct : gAlt).append('path').attr('class', 'route ' + (active ? 'active ' : 'alt ') + modo).attr('d', geo.d);
+    // desenha um pedaço de rota (linha + área de toque + selo do meio de transporte)
+    const addPath = (leg, modo, active, d, mid, real) => {
+        const geo = { d, mid };
+        const p = (active ? gAct : gAlt).append('path').attr('class', 'route ' + (active ? 'active ' : 'alt ') + modo + (real ? ' real' : '')).attr('d', geo.d);
+        if (!geo.mid) { const el = p.node(), pt = el.getPointAtLength(el.getTotalLength() / 2); geo.mid = { x: pt.x, y: pt.y }; }
         gHit.append('path').attr('class', 'route-hit').attr('d', geo.d)
           .on('pointerenter pointermove', e => { p.classed('hover', true); showTip(e, leg, modo, active); })
           .on('pointerleave', () => { p.classed('hover', false); hideTip(); })
@@ -515,6 +516,21 @@
           b.append('path').attr('d', window.ICONS[modo]).attr('transform', 'translate(-6,-6) scale(0.5)');
           place(b);
         }
+    };
+
+    const legPaths = (leg, modo, active) => {
+      const o = leg.opts[modo];
+      // trem: segue o traçado real da ferrovia quando ele já está no cache (senão, arco)
+      const real = modo === 'trem' ? window.Trilhos.geometria(leg, modo) : null;
+      if (real) {
+        const a = cityPt(leg.from), b = cityPt(leg.to);
+        const d = 'M' + a.x + ',' + a.y + real.map(c => { const p = projection(c); return 'L' + p[0].toFixed(2) + ',' + p[1].toFixed(2); }).join('') + 'L' + b.x + ',' + b.y;
+        addPath(leg, modo, active, d, null, true);
+      } else {
+        const pts = [cityPt(leg.from)];
+        o.vias.forEach(v => pts.push(viaPt(v)));
+        pts.push(cityPt(leg.to));
+        for (let i = 0; i < pts.length - 1; i++) { const geo = arc(pts[i], pts[i + 1], modo); addPath(leg, modo, active, geo.d, geo.mid, false); }
       }
       if (active) o.vias.forEach(v => {            // paradas intermediárias (ex.: Berlim, Milão, Paris)
         const s = gMk.append('g').attr('class', 'mk stop').datum(viaPt(v));
@@ -666,12 +682,40 @@
     });
     place(hg);
 
+    // paisagens no caminho dos trens: pontinhos ao longo da linha; com a escala abaixo de
+    // escalaFotosKm viram círculos com foto (a mesma regra dos pontos de interesse)
+    const cs = window.Trilhos.cenasDaRota().map(c => { const p = projection([c.lon, c.lat]); return Object.assign({ x: p[0], y: p[1] }, c); });
+    const cg = L.cenas.selectAll('g.cena').data(cs, d => d.id).join(enter => {
+      const g = enter.append('g').attr('class', 'mk cena');
+      g.append('circle').attr('class', 'dot').attr('r', 3);
+      const t = g.append('g').attr('class', 'thumb');
+      t.append('circle').attr('class', 'th-bg').attr('r', CENA_R);
+      t.append('image').attr('x', -CENA_R).attr('y', -CENA_R).attr('width', 2 * CENA_R).attr('height', 2 * CENA_R)
+        .attr('preserveAspectRatio', 'xMidYMid slice').attr('clip-path', 'url(#cena-clip)');
+      t.append('circle').attr('class', 'th-ring').attr('r', CENA_R);
+      g.append('circle').attr('class', 'hit').attr('r', 10);
+      bindPoint(g, 'cena');
+      return g;
+    });
+    cg.classed('big', fotosOn).each(function (d) {
+      if (fotosOn && !this.__foto) { this.__foto = true; d3.select(this).select('image').attr('href', d.foto); }
+      d3.select(this).select('.hit').attr('r', fotosOn ? CENA_R + 2 : 10);
+    });
+    place(cg);
+
     countryState();
 
     if (ready) {
       const sig = calc.legs.map(l => l.key + ':' + l.modo).join('|');
       if (sig !== routeSig) { routeSig = sig; drawRoutes(true); }
     }
+  };
+
+  // Redesenha as rotas sem repetir a animação (ex.: chegou o traçado real de um trem).
+  M.refreshRoutes = function () {
+    if (!ready || !A().calc) return;
+    routeSig = A().calc.legs.map(l => l.key + ':' + l.modo).join('|');
+    drawRoutes(false);
   };
 
   /* ====================================================================== zoom */

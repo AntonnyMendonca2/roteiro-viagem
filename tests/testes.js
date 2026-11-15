@@ -198,6 +198,71 @@
     igual(window.Clima.listaLevar({ tmin: 18, tmax: 24, chuva: 5, neve: 0 }), []);
   });
 
+  /* --------------------------------------------------- trens e paisagens */
+  grupo('Rota real dos trens e paisagens');
+
+  teste('Lado da janela: linha para o leste, lugar ao norte = esquerda; ao sul = direita', () => {
+    const linha = [[0, 45], [1, 45], [2, 45]];
+    const norte = window.Trilhos.lado(linha, { lat: 45.05, lon: 0.5 }), sul = window.Trilhos.lado(linha, { lat: 44.95, lon: 1.5 });
+    igual(norte.lado, 'esq'); igual(sul.lado, 'dir');
+    perto(norte.km, window.Trilhos.acumulado(linha)[1] / 2, 0.5, 'km até o ponto mais próximo');
+    perto(norte.distKm, 5.56, 0.2, 'distância até os trilhos');
+    // no sentido contrário, os lados se invertem
+    const volta = linha.slice().reverse();
+    igual(window.Trilhos.lado(volta, { lat: 45.05, lon: 0.5 }).lado, 'dir');
+  });
+
+  teste('Douglas-Peucker: mantém as pontas e os cantos, descarta pontos colineares', () => {
+    const linha = [];
+    for (let i = 0; i <= 500; i++) linha.push([i / 100, 45 + (i <= 250 ? 0 : (i - 250) / 100)]);
+    const s = window.Trilhos.simplificar(linha, 100);
+    ok(s.length <= 100 && s.length >= 3, 'tamanho ' + s.length);
+    igual(s[0], [0, 45]); igual(s[s.length - 1], [5, 47.5]);
+    ok(s.some(p => Math.abs(p[0] - 2.5) < 0.02 && Math.abs(p[1] - 45) < 0.02), 'o canto foi mantido');
+  });
+
+  teste('Amostragem a cada ~28 km e escolha de paisagens bem distribuídas', () => {
+    const linha = [[0, 45], [4, 45]];
+    const total = window.Trilhos.acumulado(linha)[1];
+    const am = window.Trilhos.amostrar(linha, 28);
+    perto(am.length, Math.round(total / 28), 1);
+    const cands = [];
+    for (let i = 0; i < 20; i++) cands.push({ titulo: 'L' + i, km: total * (i + 0.5) / 20, cenico: 1 + (i % 3), views: 1000 * (i + 1) });
+    const esc = window.Trilhos.escolher(cands, total);
+    ok(esc.length >= 3 && esc.length <= 8, 'entre 3 e 8');
+    for (let i = 1; i < esc.length; i++) ok(esc[i].km > esc[i - 1].km, 'em ordem de passagem');
+    ok(esc[esc.length - 1].km - esc[0].km > total * 0.5, 'espalhadas pelo percurso');
+  });
+
+  teste('Sugestão de lado e data de referência dos horários', () => {
+    const l = ['dir', 'dir', 'esq', 'dir', 'dir', 'esq', 'dir'].map(x => ({ lado: x }));
+    igual(window.Trilhos.sugestao(l), 'Sente do lado direito: 5 das 7 paisagens ficam à direita.');
+    igual(window.Trilhos.sugestao([{ lado: 'dir' }, { lado: 'esq' }]), '');
+    const hoje = new Date(Date.UTC(2026, 10, 15, 12));
+    const longe = window.Trilhos.dataConsulta(new Date(Date.UTC(2027, 2, 6, 12)), hoje);      // sábado, março de 2027
+    ok(longe.referencia, 'data distante vira referência');
+    igual(longe.data.getUTCDay(), 6, 'mesmo dia da semana');
+    ok(longe.data > hoje && (longe.data - hoje) / 86400000 <= 14, 'numa data próxima');
+    ok(!window.Trilhos.dataConsulta(new Date(Date.UTC(2026, 10, 20, 12)), hoje).referencia, 'data próxima usa a própria data');
+  });
+
+  teste('Resumo do Transitous: trem direto, horários locais e baldeações', () => {
+    const plano = { itineraries: [
+      { startTime: '2026-11-24T08:20:00Z', endTime: '2026-11-24T12:29:00Z', duration: 14940, legs: [
+        { mode: 'WALK', duration: 60 }, { mode: 'HIGHSPEED_RAIL', duration: 14700, displayName: 'TGV Lyria 9211', agencyName: 'SNCF', agencyUrl: 'https://www.sncf.com' }, { mode: 'WALK', duration: 60 }] },
+      { startTime: '2026-11-24T07:04:00Z', endTime: '2026-11-24T12:06:00Z', duration: 18120, legs: [
+        { mode: 'SUBWAY', duration: 600, displayName: '5' }, { mode: 'HIGHSPEED_RAIL', duration: 9000, displayName: 'TGV 2365' }, { mode: 'REGIONAL_RAIL', duration: 3000, displayName: 'TER 96251' }, { mode: 'LONG_DISTANCE', duration: 3200, displayName: 'IC3' }] },
+      { startTime: '2026-11-24T07:00:00Z', endTime: '2026-11-24T07:30:00Z', duration: 1800, legs: [{ mode: 'WALK', duration: 1800 }] }
+    ] };
+    const r = window.Trilhos.resumirPlano(plano, 'Europe/Paris', 'Europe/Zurich');
+    igual(r.length, 2, 'itinerário só a pé é descartado');
+    const direto = r.find(i => i.trocas === 0);
+    igual([direto.sai, direto.chega], ['09:20', '13:29']);
+    perto(direto.h, 4.15, 0.01);
+    igual(direto.nomes, ['TGV Lyria 9211']);
+    igual(r.find(i => i.trocas > 0).trocas, 3);
+  });
+
   /* ------------------------------------------------------------ utilitários */
   grupo('Utilitários');
 

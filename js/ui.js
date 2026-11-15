@@ -84,6 +84,10 @@
   UI.photo = (wiki, nome, cls) =>
     '<div class="photo ' + (cls || '') + '" data-wiki="' + esc(wiki || '') + '"><span>' + esc(iniciais(nome)) + '</span></div>';
 
+  // Bloco de foto quando o endereço da imagem já é conhecido (ex.: resultados da Wikipedia).
+  UI.photoUrl = (url, nome, cls) =>
+    '<div class="photo loaded ' + (cls || '') + '"><span>' + esc(iniciais(nome)) + '</span>' + (url ? '<img src="' + esc(url) + '" alt="" loading="lazy">' : '') + '</div>';
+
   UI.hydratePhotos = function (root) {
     $$('.photo[data-wiki]', root).forEach(el => {
       if (el.dataset.done) return;
@@ -572,6 +576,7 @@
         '><span>Pernoitar em ' + esc(o.via.nome) + ' <small>(+1 noite)</small></span></label>';
       if (leg.st.pernoite) html += money('Hospedagem em ' + o.via.nome, 'legs.' + leg.key + '.hospedagem');
     }
+    html += window.Trilhos.legHtml(leg);          // trem: horários reais e paisagens no caminho
     html += money('Valor real', 'legs.' + leg.key + '.real', leg.intl ? 'ou use "Voo internacional" no orçamento' : 'substitui a estimativa');
     void App;
     return html + '</li>';
@@ -678,6 +683,9 @@
       '<button type="button" class="btn" data-act="export">Exportar JSON</button>' +
       '<button type="button" class="btn" data-act="import">Importar JSON</button>' +
       '<button type="button" class="btn danger" data-act="reset">Restaurar padrão</button></div>' +
+      '<h4>Rotas dos trens</h4>' +
+      '<p class="muted">O traçado real das ferrovias é buscado aos poucos, só para os trechos do seu roteiro, e fica guardado neste navegador. Para ter tudo disponível sem internet, pré-carregue todos os trechos de trem da tabela (leva uns 2 minutos).</p>' +
+      '<div class="btn-col"><button type="button" class="btn" data-act="rail-preload">Pré-carregar rotas dos trens</button></div>' +
       '<h4>Atalhos</h4>' +
       '<p class="muted"><kbd>Esc</kbd> fecha o painel e volta ao mapa da Europa inteira. Role ou use a pinça para dar zoom; arraste para mover o mapa.</p>' +
       '<p class="muted">As fotos vêm da Wikipedia e os preços são de referência — confira nos sites oficiais antes de comprar.</p>';

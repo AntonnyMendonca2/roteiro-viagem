@@ -689,6 +689,7 @@
     if (modo === 'light') UI.renderLight(); else UI.renderAll();
     MapView.update();
     window.Clima.carregar();      // clima das cidades do roteiro (só busca o que falta)
+    window.Trilhos.carregar();    // traçado real e paisagens dos trechos de trem (só o que falta)
   };
 
   /* -------------------------------------------------------------------- ações */
@@ -889,6 +890,7 @@
 
     UI.init();          // monta a interface (o mapa precisa dela para saber a área livre)
     window.Cambio.bind();
+    window.Trilhos.bind();
     UI.renderAll();
     MapView.init();
     MapView.update();
@@ -900,6 +902,7 @@
     }
 
     window.Clima.carregar();
+    window.Trilhos.carregar();
     window.Cambio.init();   // busca as cotações (modo automático) e o histórico de 90 dias
 
     document.addEventListener('keydown', e => {
