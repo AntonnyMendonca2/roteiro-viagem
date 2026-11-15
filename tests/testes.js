@@ -201,6 +201,17 @@
   /* --------------------------------------------------- trens e paisagens */
   grupo('Rota real dos trens e paisagens');
 
+  teste('Links salvos: Airbnb sem rastreio, só http(s) vira botão', () => {
+    const U = window.UI;
+    igual(U.limparLink('https://www.airbnb.com.br/rooms/12796557?adults=1&check_in=2027-03-06&check_out=2027-03-10&search_mode=regular_search&source_impression_id=p3_x&modal=PHOTO_TOUR_SCROLLABLE'),
+      'https://www.airbnb.com.br/rooms/12796557?adults=1&check_in=2027-03-06&check_out=2027-03-10');
+    igual(U.limparLink('https://www.booking.com/hotel/fr/x.pt-br.html?aid=1&checkin=2027-03-06&checkout=2027-03-10&group_adults=2'),
+      'https://www.booking.com/hotel/fr/x.pt-br.html?checkin=2027-03-06&checkout=2027-03-10&group_adults=2');
+    igual(U.limparLink(' https://www.skyscanner.com.br/x?a=1 '), 'https://www.skyscanner.com.br/x?a=1');
+    igual(U.linkSeguro('javascript:alert(1)'), '');
+    igual(U.linkSeguro('www.airbnb.com'), '');
+  });
+
   teste('Comprar na Eurostar abre a busca já preenchida (estações, data e passageiros)', () => {
     const leg = { from: 'londres', to: 'paris' }, seg = App.calc && App.calc.segByCity.paris;
     const u = window.Trilhos.linkCompra(leg, 'Eurostar', 'https://www.eurostar.com');
@@ -609,7 +620,7 @@
     S.dataSaida = '2027-05-02';
     S.cities.roma.sel = true; S.cities.roma.ordem = 60; S.cities.roma.noites = 4;
     S.cities.roma.custos.hospedagem = { v: 480, cur: 'EUR' };
-    S.cities.londres.hosp = { nome: 'Hotel “Çà et là” – Ünïcode', lat: 51.51, lon: -0.12 };
+    S.cities.londres.hosp = { nome: 'Hotel “Çà et là” – Ünïcode', lat: 51.51, lon: -0.12, link: 'https://www.airbnb.com.br/rooms/12796557?adults=1' };
     S.legs['paris~roma'] = { modo: 'aviao', real: { v: 310, cur: 'EUR' } };
     S.customPois.push({ id: 'u-teste1', cityId: 'roma', nome: 'Sorveteria da praça', lat: 41.9, lon: 12.5, preco: { v: 5, cur: 'EUR' }, tags: [], duracaoH: 1 });
     T.sanitize(S);

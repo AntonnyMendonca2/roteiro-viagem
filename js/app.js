@@ -90,7 +90,7 @@
       const custos = {};
       D.categorias.forEach(k => { custos[k.id] = { v: '', cur: 'BRL' }; });
       s.cities[c.id] = { sel: !!c.selecionada, noites: c.noites || 1, ordem: c.ordem || 99, custos,
-        hosp: { nome: '', lat: null, lon: null },     // minha hospedagem (marcada no mapa)
+        hosp: { nome: '', lat: null, lon: null, link: '' },   // minha hospedagem (marcada no mapa) + link do anúncio/reserva
         diaria: { hosp: '', gastos: '' } };           // estimativas por dia para o assistente ('' = padrão do data.js)
     });
     D.pois.forEach(p => {
@@ -348,6 +348,7 @@
     const st = S.legs[key];
     if (MODOS.indexOf(st.modo) < 0) st.modo = def.padrao;
     if (!isObj(st.real)) st.real = { v: '', cur: 'EUR' };
+    if (typeof st.link !== 'string') st.link = '';                // link da passagem que encontrei
     if (typeof st.pernoite !== 'boolean') st.pernoite = true;   // pernoite é o recomendado
     if (!isObj(st.hospedagem)) st.hospedagem = clone(D.config.hospedagemPernoite);
 

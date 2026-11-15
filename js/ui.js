@@ -138,6 +138,29 @@
     ];
   };
 
+  // Links salvos pelo usuário: só http(s); Airbnb/Booking perdem os parâmetros de rastreio.
+  UI.linkSeguro = u => (/^https?:\/\/[^\s"<>]+$/i.test(String(u || '').trim()) ? String(u).trim() : '');
+  UI.limparLink = function (u) {
+    const s = String(u || '').trim();
+    if (!UI.linkSeguro(s)) return s;
+    try {
+      const url = new URL(s), manter = { 'airbnb.': ['adults', 'children', 'infants', 'check_in', 'check_out'],
+        'booking.com': ['checkin', 'checkout', 'group_adults', 'no_rooms'] };
+      const k = Object.keys(manter).find(d => url.hostname.indexOf(d) >= 0);
+      if (!k) return s;
+      const q = new URLSearchParams();
+      manter[k].forEach(p => { if (url.searchParams.has(p)) q.set(p, url.searchParams.get(p)); });
+      return url.origin + url.pathname + (q.toString() ? '?' + q : '');
+    } catch (e) { return s; }
+  };
+  // Campo "link" + botão Abrir (o valor fica salvo no estado pelo data-path).
+  function linkField(id, label, path, valor, ph) {
+    const ok = UI.linkSeguro(valor);
+    return '<div class="field"><label for="' + id + '">' + label + '</label><div class="money-in">' +
+      '<input type="url" id="' + id + '" data-fid="' + id + '" data-link data-path="' + esc(path) + '" placeholder="' + esc(ph) + '" value="' + esc(valor || '') + '">' +
+      (ok ? '<a class="btn" href="' + esc(ok) + ext + 'Abrir ↗</a>' : '') + '</div></div>';
+  }
+
   const linkBtns = list => list.map(l => '<a class="btn" href="' + esc(l.url) + ext + esc(l.nome) + ' ↗</a>').join('');
 
   // Linhas de voo para uma cidade (trecho de chegada e, se for a última, a volta).
@@ -224,7 +247,8 @@
       '<div class="links tight">' + linkBtns(UI.linksHosp(c, seg)) + '</div>';
     if (!cs.sel) return html;
     html += '<div class="hosp-box"><div class="field"><label for="f-hn-' + c.id + '">Minha hospedagem <small>nome ou endereço</small></label>' +
-      '<input type="text" id="f-hn-' + c.id + '" data-fid="f-hn-' + c.id + '" data-path="cities.' + c.id + '.hosp.nome" placeholder="Ex.: Generator Paris" value="' + esc(cs.hosp.nome) + '"></div>';
+      '<input type="text" id="f-hn-' + c.id + '" data-fid="f-hn-' + c.id + '" data-path="cities.' + c.id + '.hosp.nome" placeholder="Ex.: Generator Paris" value="' + esc(cs.hosp.nome) + '"></div>' +
+      linkField('f-hl-' + c.id, 'Link da hospedagem <small>Airbnb, Booking, reserva…</small>', 'cities.' + c.id + '.hosp.link', cs.hosp.link, 'https://www.airbnb.com.br/rooms/…');
     if (h) {
       html += '<p class="hosp-ok">⌂ Marcada no mapa — as distâncias dos pontos são medidas a partir dela.</p>' +
         '<div class="links tight"><button type="button" class="btn" data-act="hosp-show" data-id="' + c.id + '">Ver no mapa</button>' +
@@ -364,6 +388,7 @@
       const t = e.target;
       if (t.dataset.otim) { A().setOtim(t.dataset.otim, t.type === 'checkbox' ? t.checked : t.value); return; }
       if (!t.dataset.path) return;
+      if ('link' in t.dataset) { A().set(t.dataset.path, UI.limparLink(t.value)); A().refresh(); return; }
       if (t.type === 'checkbox') A().set(t.dataset.path, t.checked);
       else if (t.type === 'date') { if (!t.value) return; A().set(t.dataset.path, t.value); }
       else if (t.tagName === 'SELECT') A().set(t.dataset.path, t.value);
@@ -592,7 +617,12 @@
       if (leg.st.pernoite) html += money('Hospedagem em ' + o.via.nome, 'legs.' + leg.key + '.hospedagem');
     }
     html += window.Trilhos.legHtml(leg);          // trem: horários reais e paisagens no caminho
+    if (leg.modo === 'aviao') {                   // avião: buscadores de voo já preenchidos
+      const f = App.flightsFor(leg.to === 'vcp' ? leg.from : leg.to).find(r => r.from === leg.from && r.to === leg.to);
+      if (f) html += '<div class="links tight">' + linkBtns(UI.linksVoo(f.from, f.to, f.date)) + '</div>';
+    }
     html += money('Valor real', 'legs.' + leg.key + '.real', leg.intl ? 'ou use "Voo internacional" no orçamento' : 'substitui a estimativa');
+    html += linkField('f-ll-' + key, 'Link da passagem <small>a que eu encontrei</small>', 'legs.' + leg.key + '.link', leg.st.link, 'https://…');
     void App;
     return html + '</li>';
   }

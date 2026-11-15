@@ -26,7 +26,7 @@
     if (!isObj(o)) return;
     if (isObj(o.cities)) Object.keys(o.cities).forEach(id => { const c = o.cities[id]; if (isObj(c)) { delete c.hosp; delete c.custos; delete c.diaria; } });
     if (isObj(o.pois)) Object.keys(o.pois).forEach(id => { const p = o.pois[id]; if (isObj(p)) { delete p.valor; delete p.transporte; } });
-    if (isObj(o.legs)) Object.keys(o.legs).forEach(k => { if (isObj(o.legs[k])) delete o.legs[k].real; });
+    if (isObj(o.legs)) Object.keys(o.legs).forEach(k => { if (isObj(o.legs[k])) { delete o.legs[k].real; delete o.legs[k].link; } });
     if (raiz) {
       delete o.gerais; delete o.orcamento; delete o.spread; delete o.iof;
       if (isObj(o.assist)) delete o.assist.orcamento;
