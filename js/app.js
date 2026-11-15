@@ -939,6 +939,7 @@
     window.Trilhos.bind();
     window.Ape.bind();
     window.Descobrir.bind();
+    window.DiaADia.bind();
     UI.renderAll();
     MapView.init();
     MapView.update();

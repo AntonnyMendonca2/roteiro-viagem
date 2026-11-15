@@ -65,6 +65,7 @@ js/wiki.js      consultas à Wikipedia (lugares próximos, busca, popularidade) 
 js/trilhos.js   traçado real dos trens, horários reais e paisagens no caminho
 js/ape.js       trajetos reais a pé (matriz de tempos da cidade e caminho desenhado)
 js/descobrir.js "Descobrir por perto" e pontos de interesse criados pelo usuário
+js/diaadia.js   roteiro dia a dia automático de cada cidade
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -160,6 +161,17 @@ descartar o que estava salvo no navegador.
   cinza) e para **adicionar um ponto pelo nome**. Pontos criados por você levam a marca "meu",
   têm preço editável (padrão 0) e podem ser excluídos no painel do ponto. As paisagens do caminho
   do trem também podem virar pontos com o botão **+**.
+- **Dia a dia:** o painel de cada cidade do roteiro monta a agenda dos pontos selecionados: dia
+  de chegada só à tarde, dias inteiros das 9h às 19h e partida só de manhã (ajustável em
+  `DATA.config.diaADia`). Bate-voltas longos ganham um dia só para eles; os demais pontos são
+  agrupados por proximidade, respeitando dias fechados, horários e o dia que você fixar. Cada
+  ponto mostra o horário estimado e o deslocamento (a pé pelas ruas, ou transporte se for longe).
+  Arraste um ponto para outro dia (ou use o seletor ao lado) para fixá-lo; **Reorganizar
+  automaticamente** libera os dias fixos. Avisos: dia puxado (mais de 10h, com sugestão do que
+  mover), atração que fecha antes e atividade ao ar livre depois do pôr do sol. No mapa, os
+  chips escolhem o dia: o trajeto dele aparece em destaque com os pontos numerados e os outros
+  dias em cinza tracejado. Clicar num dia da linha do tempo abre o plano daquele dia, e **Copiar
+  como texto** leva a agenda para a área de transferência.
 - **Esc** ou **Ver Europa inteira** fecha o painel e volta ao zoom inicial.
 
 Os preços e tempos são aproximados e servem de referência — confira nos sites oficiais antes de

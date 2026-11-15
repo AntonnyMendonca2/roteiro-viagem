@@ -18,7 +18,9 @@ window.DATA = {
     noitesVooIda: 1,                  // noite passada em voo na ida (Brasil → Europa)
     escalaFotosKm: 5,                 // fotos dos pontos somem quando a escala do mapa chega a este valor (km)
     viajantes: 1,                     // nº de pessoas nas buscas de voos e hospedagem
-    hospedagemPernoite: { v: 80, cur: 'EUR' }  // estimativa de 1 noite em parada de trem
+    hospedagemPernoite: { v: 80, cur: 'EUR' }, // estimativa de 1 noite em parada de trem
+    // dia a dia: horários de cada tipo de dia e limites (veja js/diaadia.js)
+    diaADia: { inicioH: 9, fimH: 19, chegadaH: 14, partidaH: 12, puxadoH: 10, bateVoltaLongoH: 4 }
   },
 
   /* ------------------------------------------------------ moedas e câmbio */

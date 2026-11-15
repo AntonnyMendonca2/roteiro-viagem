@@ -380,6 +380,75 @@
     ok(!App.poi(p.id) && !(p.id in S.pois), 'excluído');
   });
 
+  /* ------------------------------------------------------------- dia a dia */
+  grupo('Dia a dia');
+
+  // cenário de teste: 3 dias (chegada na segunda, terça inteira, partida na quarta)
+  function cenarioDias() {
+    return [
+      { iso: '2027-03-08', dow: 1, ini: 14, fim: 19, tipo: 'chegada' },
+      { iso: '2027-03-09', dow: 2, ini: 9, fim: 19, tipo: 'inteiro' },
+      { iso: '2027-03-10', dow: 3, ini: 9, fim: 12, tipo: 'partida' }
+    ];
+  }
+  const P0 = { lat: 48.85, lon: 2.35 };
+  const pt = (id, dLat, dLon, dur, extra) => Object.assign({ id, lat: 48.85 + dLat, lon: 2.35 + dLon, dur, longo: false, fechado: null, fixo: '', abre: null, fecha: null }, extra || {});
+  function deslocReta(pontos) {
+    const idx = { _o: P0 }; pontos.forEach(p => { idx[p.id] = p; });
+    return (a, b) => (a === b || idx[a].longo || idx[b].longo ? { min: 0, modo: 'incluso' } : { min: App.distKm(idx[a], idx[b]) * 1.3 / 4.8 * 60, modo: 'pe' });
+  }
+  const onde = (plano, id) => plano.dias.find(d => d.itens.some(i => i.id === id)).iso;
+
+  teste('Respeita dia fechado: museu que fecha na terça não cai na terça', () => {
+    const pontos = [pt('museu', 0.004, 0.002, 3, { fechado: [2] }), pt('torre', 0.005, 0.003, 2), pt('igreja', -0.003, 0.001, 1), pt('praca', 0.001, -0.004, 1), pt('parque', -0.002, -0.003, 1.5)];
+    const plano = window.DiaADia.planejar({ dias: cenarioDias(), pontos, desloc: deslocReta(pontos) });
+    ok(onde(plano, 'museu') !== '2027-03-09', 'museu caiu na terça');
+    igual(plano.dias.reduce((s, d) => s + d.itens.length, 0), 5, 'todos os pontos têm dia');
+    plano.dias.forEach(d => igual(d.fechados, [], 'nenhum fechado em ' + d.iso));
+  });
+
+  teste('Dia fixo escolhido pelo usuário é mantido', () => {
+    const pontos = [pt('a', 0.004, 0.002, 2, { fixo: '2027-03-10' }), pt('b', 0.005, 0.003, 2), pt('c', -0.003, 0.001, 1), pt('d', 0.02, 0.02, 2, { fixo: '2027-03-08' })];
+    const plano = window.DiaADia.planejar({ dias: cenarioDias(), pontos, desloc: deslocReta(pontos) });
+    igual(onde(plano, 'a'), '2027-03-10'); igual(onde(plano, 'd'), '2027-03-08');
+    ok(plano.dias[2].itens.find(i => i.id === 'a').fixo, 'marcado como fixo');
+  });
+
+  teste('Bate-volta longo ocupa um dia inteiro sozinho', () => {
+    const pontos = [pt('disney', 0.02, 0.4, 10, { longo: true }), pt('b', 0.005, 0.003, 2), pt('c', -0.003, 0.001, 1), pt('d', 0.002, 0.002, 1)];
+    const plano = window.DiaADia.planejar({ dias: cenarioDias(), pontos, desloc: deslocReta(pontos) });
+    const dia = plano.dias.find(d => d.itens.some(i => i.id === 'disney'));
+    igual(dia.tipo, 'inteiro', 'vai para o dia inteiro'); igual(dia.itens.length, 1, 'sozinho no dia');
+  });
+
+  teste('Horários: sai da origem, respeita a abertura e volta; dia puxado gera sugestão', () => {
+    const pontos = [pt('cedo', 0.004, 0, 1, { abre: 10 }), pt('perto', 0.001, 0, 1)];
+    const dias = [{ iso: '2027-03-09', dow: 2, ini: 9, fim: 19, tipo: 'inteiro' }];
+    const plano = window.DiaADia.planejar({ dias, pontos, desloc: deslocReta(pontos) });
+    const d = plano.dias[0], cedo = d.itens.find(i => i.id === 'cedo');
+    ok(cedo.chega >= 10 - 1e-9, 'não entra antes de abrir');
+    igual(d.itens[0].id, 'perto', 'visita o que já está aberto primeiro');
+    ok(d.volta.min > 0 && d.fim > d.itens[1].sai, 'volta para a origem');
+    // dia puxado
+    const muitos = [];
+    for (let i = 0; i < 6; i++) muitos.push(pt('m' + i, 0.002 * i, 0.001, 2.2));
+    const dois = [{ iso: '2027-03-09', dow: 2, ini: 9, fim: 19, tipo: 'inteiro' }, { iso: '2027-03-10', dow: 3, ini: 9, fim: 12, tipo: 'partida' }];
+    const fixos = muitos.map(p => Object.assign({}, p, { fixo: p.id === 'm5' ? '' : '2027-03-09' }));
+    const p2 = window.DiaADia.planejar({ dias: dois, pontos: fixos, desloc: deslocReta(fixos) });
+    ok(p2.dias[0].puxado, 'mais de 10h de atividade');
+  });
+
+  teste('Plano real de Paris (dados do app): Louvre fora da terça, Disneyland em dia inteiro', () => {
+    novoEstado();
+    App.calc = T.compute();
+    const pl = window.DiaADia.plano('paris');
+    ok(pl && pl.n >= 4, 'tem pontos');
+    const louvre = pl.dias.find(d => d.itens.some(i => i.id === 'louvre')), disney = pl.dias.find(d => d.itens.some(i => i.id === 'disneyland'));
+    ok(louvre.dow !== 2, 'Louvre na terça');
+    igual(disney.itens.length, 1); igual(disney.tipo, 'inteiro');
+    ok(window.DiaADia.texto('paris').indexOf('Louvre') > 0, 'texto para copiar');
+  });
+
   /* ------------------------------------------------------------ utilitários */
   grupo('Utilitários');
 

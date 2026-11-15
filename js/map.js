@@ -60,7 +60,7 @@
     svg.select('defs').append('clipPath').attr('id', 'cena-clip').append('circle').attr('r', CENA_R);
     scaleEl = document.getElementById('scale');
     attribEl = document.getElementById('attrib');
-    ['countries', 'hatch', 'routes', 'trips', 'walk', 'cenas', 'cities', 'sug', 'pois', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
+    ['countries', 'hatch', 'routes', 'trips', 'walk', 'cenas', 'cities', 'sug', 'pois', 'nums', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
       L[n] = root.append('g').attr('class', 'l-' + n);
     });
     card = document.getElementById('hovercard');
@@ -716,6 +716,24 @@
       return g;
     });
     place(sg);
+
+    // dia a dia: trajeto do dia escolhido em destaque (pontos numerados); outros dias em cinza tracejado
+    const dp = window.DiaADia.paraMapa();
+    const linha = c => 'M' + c.map(p => { const q = projection(p); return q[0].toFixed(3) + ',' + q[1].toFixed(3); }).join('L');
+    const caminhos = dp ? dp.outros.map(c => ({ c, on: false })).concat(dp.ativo ? [{ c: dp.ativo, on: true }] : []) : [];
+    L.walk.selectAll('path.daypath').data(caminhos).join('path')
+      .attr('class', d => 'daypath ' + (d.on ? 'on' : 'other')).attr('d', d => linha(d.c));
+    const ns = (dp ? dp.nums : []).map(n => { const q = projection([n.lon, n.lat]); return Object.assign({ x: q[0], y: q[1] }, n); });
+    const ng = L.nums.selectAll('g.daynum').data(ns, d => d.id).join(enter => {
+      const g = enter.append('g').attr('class', 'mk daynum');
+      g.append('circle').attr('r', 8.5);
+      g.append('text').attr('y', 3.6).attr('text-anchor', 'middle');
+      return g;
+    });
+    ng.select('text').text(d => d.n);
+    ng.select('circle').attr('cx', fotosOn ? -TH_R + 3 : -9).attr('cy', fotosOn ? -TH_R + 3 : -9);
+    ng.select('text').attr('x', fotosOn ? -TH_R + 3 : -9).attr('y', (fotosOn ? -TH_R + 3 : -9) + 3.6);
+    place(ng);
 
     countryState();
 

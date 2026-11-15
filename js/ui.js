@@ -334,7 +334,14 @@
         case 'hosp-clear': App.state.cities[id].hosp.lat = null; App.state.cities[id].hosp.lon = null; App.refresh(); UI.toast('Hospedagem removida do mapa.'); break;
         case 'hosp-show': { openDrawer(false); window.MapView.showHosp(id); break; }
         case 'legend': els.legend.classList.toggle('open'); break;
-        case 'day': if (id) App.openCity(id); break;
+        case 'day': {           // dia da linha do tempo → abre a cidade no plano daquele dia
+          if (!id) break;
+          window.DiaADia.sel = { cityId: id, iso: t.dataset.dia };
+          App.openCity(id);
+          const h = $$('h4', els.detail).find(x => /^Dia a dia/.test(x.textContent));
+          if (h && App.state.cities[id].sel) els.detail.scrollTop = Math.max(0, h.offsetTop - 50);
+          break;
+        }
         default: if (UI.actions[act]) UI.actions[act](t, id, e);
       }
     });
@@ -712,6 +719,8 @@
     }
     html += hospSection(c) + '<h4>Passagens aéreas</h4>' + UI.flightRows(c.id);
 
+    html += window.DiaADia.cityHtml(c);
+
     html += '<h4>Pontos de interesse <small>' + ativos + ' de ' + todos.length + ' no roteiro' + (tag ? ' · filtro: ' + esc(tag) : '') + '</small></h4>';
     if (temBV) html += '<div class="chips wrap"><button type="button" class="chip" data-act="fit-core" data-id="' + c.id + '">Ver o centro</button>' +
       '<button type="button" class="chip" data-act="fit-all" data-id="' + c.id + '">Ver com bate-voltas</button></div>';
@@ -790,6 +799,7 @@
     renderDetail();
     renderOuts();
     renderTimeline();
+    window.DiaADia.renderChips();
     if (key !== lastFocusKey) els.detail.scrollTop = 0;
     lastFocusKey = key;
     document.body.classList.add('detail-open');
@@ -799,6 +809,8 @@
   UI.hideDetail = function () {
     lastFocusKey = '';
     document.body.classList.remove('detail-open');
+    const dc = document.getElementById('daychips');
+    if (dc) dc.innerHTML = '';
     if (A().calc) renderTimeline();
   };
 
@@ -868,6 +880,7 @@
     renderCompare();
     renderTimeline();
     renderOuts();
+    window.DiaADia.renderChips();
 
     els.views.scrollTop = sv; els.detail.scrollTop = sd; els.views.parentNode.scrollTop = ss;
     if (fid) {

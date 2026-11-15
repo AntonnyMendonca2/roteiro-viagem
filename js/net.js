@@ -72,7 +72,7 @@
     padrao: { max: 4, gap: 0 },
     cambio: { max: 2, gap: 0 },       // Frankfurter
     clima: { max: 2, gap: 250 },      // Open-Meteo
-    wiki: { max: 4, gap: 120 },       // Wikipedia: fotos e buscas pedidas pelo usuário
+    wiki: { max: 4, gap: 200 },       // Wikipedia: fotos e buscas pedidas pelo usuário
     views: { max: 4, gap: 60 },       // Wikimedia: popularidade (acessos por mês), no máximo 4 por vez
     fundo: { max: 2, gap: 250 },      // Wikipedia em segundo plano (paisagens dos trens): não atrapalha o resto
     ape: { max: 1, gap: 1100 },       // OSRM a pé (servidor comunitário: 1 por segundo)

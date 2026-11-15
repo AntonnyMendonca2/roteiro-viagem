@@ -249,6 +249,15 @@ small { font-weight: 400; color: var(--muted); }
 .lvl-city .trip.off { opacity: .08; }
 .trip.sel { stroke: var(--accent); }
 
+/* dia a dia no mapa: trajeto do dia escolhido e pontos numerados */
+.daypath { fill: none; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.daypath.on { stroke: var(--accent); stroke-width: calc(3px / var(--k)); filter: drop-shadow(0 0 calc(2px / var(--k)) rgba(0, 0, 0, .9)); }
+.daypath.other { stroke: #8a8a8a; stroke-width: calc(1.6px / var(--k)); stroke-dasharray: calc(5px / var(--k)) calc(6px / var(--k)); opacity: .75; }
+.daynum { pointer-events: none; opacity: 0; transition: opacity .3s; }
+.lvl-city .daynum { opacity: 1; }
+.daynum circle { fill: var(--accent); stroke: var(--bg); stroke-width: 1.5px; }
+.daynum text { font-size: 10.5px; font-weight: 700; fill: var(--accent-ink); }
+
 /* sugestões de "Descobrir por perto": losangos cinza */
 .sug .dia { fill: #4a4a4a; stroke: #cfcfcf; stroke-width: 1.3px; }
 .sug:hover .dia { fill: #8a8a8a; stroke: #fff; }
@@ -315,6 +324,12 @@ small { font-weight: 400; color: var(--muted); }
 .top-btns { display: flex; gap: 6px; flex: none; margin-left: auto; }
 #btn-home { opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .25s, transform .25s, visibility .25s; }
 .zoomed #btn-home { opacity: 1; visibility: visible; transform: none; }
+
+/* chips do dia a dia sobre o mapa */
+#daychips { position: fixed; top: 52px; left: 14px; right: calc(var(--sidebar-w) + 14px); z-index: 5; align-items: center; pointer-events: none; }
+#daychips:empty { display: none; }
+#daychips > * { pointer-events: auto; }
+#daychips > span { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #cfcfcf; text-shadow: 0 0 4px #000; flex: none; margin-right: 2px; }
 
 /* ================================================================== PAINEL */
 #sidebar {
@@ -615,6 +630,29 @@ details.more > summary:hover { color: #fff; }
 .pack li { background: var(--panel-3); border-radius: 999px; padding: 2px 9px; font-size: 12px; }
 .pack small { display: block; font-size: 11.5px; }
 
+/* dia a dia (painel da cidade) */
+.dd { display: flex; flex-direction: column; gap: 8px; }
+.dd-day { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 10px 8px; transition: border-color .2s; }
+.dd-day.on { border-color: var(--accent); }
+.dd-day.drop { border-color: #fff; border-style: dashed; }
+.dd-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; border: 0; background: none; padding: 6px 0; text-align: left; }
+.dd-head b { font-size: 13px; font-weight: 600; }
+.dd-day.on .dd-head b { color: var(--accent); }
+.dd-head small { font-size: 11.5px; text-align: right; }
+.dd-day ol { list-style: none; margin: 0; padding: 0; }
+.dd-it { display: flex; align-items: center; gap: 8px; padding: 5px 0; cursor: grab; }
+.dd-n { width: 20px; height: 20px; border-radius: 50%; background: var(--panel-3); color: #d0d0d0; font-size: 11px; font-weight: 700; display: grid; place-items: center; flex: none; }
+.dd-day.on .dd-n { background: var(--accent); color: var(--accent-ink); }
+.dd-t { flex: 1; min-width: 0; border: 0; background: none; text-align: left; padding: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.dd-t b { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dd-t small { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.dd-it.warn .dd-t small { color: var(--accent); }
+.dd-mv { width: 82px; flex: none; padding: 3px 4px; font-size: 11px; border-radius: 7px; color: #b5b5b5; }
+.dd-go { font-size: 11px; color: var(--muted); padding: 0 0 0 28px; position: relative; }
+.dd-go::before { content: ''; position: absolute; left: 9.5px; top: -3px; bottom: -3px; border-left: 1px dashed #555; }
+.dd-empty { font-size: 12px; color: var(--muted); padding: 2px 0 4px; }
+.dd-warn { font-size: 12px; color: #e6e6e6; border-left: 2px solid var(--accent); padding: 2px 0 2px 8px; margin: 6px 0 0; }
+
 /* descobrir por perto */
 .sugs { list-style: none; margin: 8px 0; padding: 0; }
 .sug { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
@@ -770,6 +808,7 @@ input[type=text]:focus { outline: none; border-color: var(--accent); }
   :root { --sidebar-w: 0px; --timeline-h: 72px; --peek: 104px; }
 
   #topbar { top: 8px; left: 10px; right: 10px; flex-wrap: wrap; gap: 6px 10px; }
+  #daychips { top: 112px; left: 10px; right: 10px; }
   .brand { flex-direction: row; align-items: baseline; gap: 6px; }
   .chips#tags { order: 3; flex-basis: 100%; }
   #loading { left: 50%; top: 40%; }
