@@ -302,6 +302,84 @@
     ok(t.longe && /linha reta/.test(t.longo));
   });
 
+  /* ---------------------------------------------------- descobrir por perto */
+  grupo('Descobrir por perto e pontos do usuário');
+
+  teste('Filtro: artigos reais do geosearch de Paris que NÃO são lugares', () => {
+    const naoLugares = [
+      { titulo: 'Paris Commune', desc: 'Revolutionary city council of Paris of 1871' },
+      { titulo: 'Second French Empire', desc: '1852–1870 empire in France' },
+      { titulo: 'July Monarchy', desc: 'Kingdom governing France, 1830–1848' },
+      { titulo: 'Siege of Paris (1870–1871)', desc: 'Siege during the Franco-Prussian War' },
+      { titulo: 'November 2015 Paris attacks', desc: 'Series of coordinated terrorist attacks' },
+      { titulo: 'French Third Republic', desc: 'Nation of France from 1870 to 1940' },
+      { titulo: 'Molière', desc: 'French playwright and actor (1622–1673)' },
+      { titulo: 'Liberation of Paris', desc: 'Military battle that took place during World War II' },
+      { titulo: 'Agence France-Presse', desc: 'French international news agency' },
+      { titulo: 'Paris Saint-Germain FC', desc: 'Association football club in Paris, France' },
+      { titulo: '1900 Summer Olympics', desc: 'Games of the II Olympiad' }
+    ];
+    naoLugares.forEach(i => ok(!window.Wiki.ehLugar(i), 'deveria descartar: ' + i.titulo));
+    const lugares = [
+      { titulo: 'Panthéon', desc: 'Mausoleum in Paris, France' },
+      { titulo: 'Palais Garnier', desc: 'Opera house in Paris, France' },
+      { titulo: 'Père Lachaise Cemetery', desc: 'Cemetery in Paris, France' },
+      { titulo: 'Luxembourg Gardens', desc: 'Park in Paris, France' },
+      { titulo: 'Pont Neuf', desc: 'Bridge across the Seine in Paris' },
+      { titulo: 'Les Invalides', desc: 'Building complex in Paris, France' },
+      { titulo: 'Centre Pompidou', desc: 'Art museum and cultural centre in Paris, France' }
+    ];
+    lugares.forEach(i => ok(window.Wiki.ehLugar(i), 'deveria manter: ' + i.titulo));
+  });
+
+  teste('Filtro: descarta a própria cidade, pontos já cadastrados e ocultados', () => {
+    const itens = [
+      { titulo: 'Paris', nome: 'Paris', desc: 'Capital of France' },
+      { titulo: 'Louvre', nome: 'Museu do Louvre', desc: 'Art museum in Paris, France' },
+      { titulo: 'Sainte-Chapelle', nome: 'Sainte-Chapelle', desc: 'Royal chapel in Paris' },
+      { titulo: 'Panthéon', nome: 'Panteão de Paris', desc: 'Mausoleum in Paris, France', foto: 'x' },
+      { titulo: 'Pont Neuf', nome: 'Pont Neuf', desc: 'Bridge across the Seine in Paris' },
+      { titulo: 'Panthéon', nome: 'Panteão de Paris', desc: 'repetido' }
+    ];
+    const ctx = { cidade: ['Paris'], wikis: ['Louvre'], nomes: ['Sainte-Chapelle'], ocultos: ['Pont Neuf'] };
+    igual(window.Descobrir.filtrar(itens, ctx).map(i => i.titulo), ['Panthéon']);
+  });
+
+  teste('Candidatos preferem quem tem foto; a ordem final é por acessos', () => {
+    const c = window.Descobrir.candidatos([{ titulo: 'a', dist: 1 }, { titulo: 'b', foto: 'x', dist: 5 }, { titulo: 'c', foto: 'x', dist: 2 }, { titulo: 'd', foto: 'x', pt: true, desc: 'Art museum in Paris', dist: 9 }], 3);
+    igual(c.map(i => i.titulo), ['d', 'c', 'b']);
+    igual(window.Descobrir.grade({ lat: 48.85, lon: 2.35 }).length, 9, 'grade 3 × 3');
+    ok(!window.Wiki.ehLugar({ titulo: '4th arrondissement of Paris', desc: 'Municipal arrondissement in Paris' }), 'divisão administrativa');
+    ok(window.Wiki.ehLugar({ titulo: 'Centre Pompidou', desc: 'High-tech architecture building in the 4th arrondissement of Paris' }), 'Pompidou é lugar');
+    igual(window.Descobrir.ordenar([{ titulo: 'a', views: 10 }, { titulo: 'b', views: 500 }, { titulo: 'c', views: 50 }]).map(i => i.titulo), ['b', 'c', 'a']);
+  });
+
+  teste('Ponto do usuário entra em tudo: lista, totais, exportar/importar e exclusão', () => {
+    const S = novoEstado();
+    window.MapView.rebuildPois = () => {}; App.refresh = () => { App.calc = T.compute(); };
+    S.spread = 0;
+    App.calc = T.compute();
+    const antes = App.calc.total;
+    const p = window.Descobrir.novoPonto({ titulo: 'Panthéon', nome: 'Panteão de Paris', pt: true, desc: 'mausoleum in Paris', lat: 48.8462, lon: 2.3464, foto: 'f' }, 'paris', 'EUR');
+    ok(/^u-/.test(p.id) && p.custom && p.preco.v === 0, 'formato');
+    App.addCustomPoi(p);
+    ok(App.poi(p.id) === p && App.poisOf('paris').indexOf(p) >= 0, 'aparece na cidade');
+    ok(App.poiActive(p.id), 'entra selecionado (a cidade está no roteiro)');
+    S.pois[p.id].valor.v = 10;
+    App.refresh();
+    perto(App.calc.total - antes, 10 * S.cambio.EUR, 1e-6, 'o valor entra no total');
+    ok(App.calc.cats.atracoes > 0, 'entra em atrações');
+    // exportar → importar
+    const copia = T.sanitize(T.merge(T.defaults(), JSON.parse(JSON.stringify(S))));
+    igual(copia.customPois.length, 1); igual(copia.pois[p.id].valor.v, 10);
+    // um ponto inválido é descartado na importação
+    const sujo = JSON.parse(JSON.stringify(S));
+    sujo.customPois.push({ id: 'louvre', cityId: 'paris', nome: 'x', lat: 1, lon: 1, preco: { v: 0, cur: 'EUR' } }, { id: 'u-x', cityId: 'nao-existe', nome: 'x', lat: 1, lon: 1, preco: {} });
+    igual(T.sanitize(T.merge(T.defaults(), sujo)).customPois.length, 1);
+    App.removeCustomPoi(p.id);
+    ok(!App.poi(p.id) && !(p.id in S.pois), 'excluído');
+  });
+
   /* ------------------------------------------------------------ utilitários */
   grupo('Utilitários');
 

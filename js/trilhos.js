@@ -243,7 +243,7 @@
     const App = A(), pontas = [App.city(leg.from), App.city(leg.to)];
     const amostras = Trilhos.amostrar(coords, Math.max(28, total / 16));
 
-    cenasPedindo[ck] = Promise.all(amostras.map(s => Wiki.geosearch(s.lat, s.lon, 10000, 30).catch(() => [])))
+    cenasPedindo[ck] = Promise.all(amostras.map(s => Wiki.geosearch(s.lat, s.lon, 10000, 30, 'fundo').catch(() => [])))
       .then(listas => {
         const vistos = {}, cands = [];
         listas.forEach(l => l.forEach(i => {
@@ -260,7 +260,7 @@
         }));
         // popularidade só dos melhores candidatos (os mais "cênicos" de cada trecho do caminho)
         cands.sort((a, b) => b.cenico - a.cenico);
-        return Wiki.comAcessos(cands.slice(0, 18));
+        return Wiki.comAcessos(cands.slice(0, 18), 'fundo');
       })
       .then(cands => {
         const lista = Trilhos.escolher(cands, total).map(x => ({ titulo: x.titulo, nome: x.nome, desc: x.desc, foto: x.foto,

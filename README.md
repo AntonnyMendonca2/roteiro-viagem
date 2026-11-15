@@ -64,6 +64,7 @@ js/clima.js     clima típico nas datas, previsão, nascer/pôr do sol e lista "
 js/wiki.js      consultas à Wikipedia (lugares próximos, busca, popularidade) e filtros
 js/trilhos.js   traçado real dos trens, horários reais e paisagens no caminho
 js/ape.js       trajetos reais a pé (matriz de tempos da cidade e caminho desenhado)
+js/descobrir.js "Descobrir por perto" e pontos de interesse criados pelo usuário
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -152,6 +153,13 @@ descartar o que estava salvo no navegador.
   desde a sua hospedagem (ou do centro). **Como chegar a pé** desenha o caminho no mapa. Acima de
   3 km o app sugere o transporte público, com o link do Google Maps. Sem internet, volta à
   estimativa (linha reta × 1,3) e avisa "estimativa".
+- **Descobrir por perto:** no fim do painel da cidade, **Buscar sugestões na Wikipedia** lista
+  atrações que ainda não estão cadastradas, com foto, descrição, distância e acessos por mês.
+  **+ Adicionar** cria o ponto (ele passa a valer em tudo: mapa, totais, filtros, exportar);
+  **Ocultar** some com a sugestão e o app lembra. Dá para ver as sugestões no mapa (losangos
+  cinza) e para **adicionar um ponto pelo nome**. Pontos criados por você levam a marca "meu",
+  têm preço editável (padrão 0) e podem ser excluídos no painel do ponto. As paisagens do caminho
+  do trem também podem virar pontos com o botão **+**.
 - **Esc** ou **Ver Europa inteira** fecha o painel e volta ao zoom inicial.
 
 Os preços e tempos são aproximados e servem de referência — confira nos sites oficiais antes de

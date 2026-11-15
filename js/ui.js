@@ -508,7 +508,7 @@
     const App = A(), c = App.calc, S = App.state;
     // avisos de "fechado" por data (ex.: Louvre às terças)
     const avisos = {};
-    D.pois.forEach(p => {
+    App.pois().forEach(p => {
       const w = App.poiWarn(p);
       if (w) w.datas.forEach(d => { avisos[p.cityId + '|' + d] = p.nome + ': ' + w.texto; });
     });
@@ -720,10 +720,11 @@
       return '<li class="poirow' + (on ? ' on' : '') + '">' +
         '<button type="button" class="chk" data-act="toggle-poi" data-id="' + p.id + '" data-fid="tp-' + p.id + '" aria-pressed="' + on + '" aria-label="' +
         (on ? 'Remover do roteiro' : 'Incluir no roteiro') + '">✓</button>' +
-        '<button type="button" class="pr-main" data-act="open-poi" data-id="' + p.id + '"><span class="pr-n">' + esc(p.nome) + (w ? ' <i class="wdot" title="' + esc(w.texto) + '">!</i>' : '') + '</span>' +
+        '<button type="button" class="pr-main" data-act="open-poi" data-id="' + p.id + '"><span class="pr-n">' + esc(p.nome) + (p.custom ? ' <i class="mine" title="Adicionado por você">meu</i>' : '') + (w ? ' <i class="wdot" title="' + esc(w.texto) + '">!</i>' : '') + '</span>' +
         '<span class="pr-m">' + esc(p.preco.label) + ' · ' + esc(UI.dist(p).curto) + (p.tags.length ? ' · ' + esc(p.tags.join(', ')) : '') + '</span></button></li>';
-    }).join('') : '<li class="empty">Nenhum ponto com a tag "' + esc(tag) + '" nesta cidade.</li>') + '</ul></div>';
-    return html;
+    }).join('') : '<li class="empty">Nenhum ponto com a tag "' + esc(tag) + '" nesta cidade.</li>') + '</ul>';
+    html += window.Descobrir.cityHtml(c);
+    return html + '</div>';
   }
 
   function poiDetail(p) {
@@ -746,6 +747,7 @@
         money('Transporte (ida e volta)', 'pois.' + p.id + '.transporte', '<span data-out="poi-tr:' + p.id + '"></span>');
     }
     if (!on) html += '<p class="muted">Os valores só entram no total quando o ponto está no roteiro.</p>';
+    if (p.custom) html += '<p class="muted">Ponto adicionado por você. Informe o valor do ingresso acima (o padrão é 0).</p>';
 
     const dias = App.cityDays(p.cityId);
     if (dias.length) {
@@ -759,7 +761,8 @@
     html += '<div class="links">' +
       '<a class="btn" href="https://www.google.com/maps/search/?api=1&amp;query=' + ll + ext + 'Ver no Google Maps ↗</a>' +
       '<a class="btn" href="https://www.google.com/maps/dir/?api=1&amp;destination=' + ll + '&amp;travelmode=transit' + ext + 'Como chegar ↗</a>' +
-      (p.site ? '<a class="btn" href="' + esc(p.site) + ext + 'Site oficial ↗</a>' : '') + '</div>';
+      (p.site ? '<a class="btn" href="' + esc(p.site) + ext + (p.custom ? 'Wikipedia ↗' : 'Site oficial ↗') + '</a>' : '') + '</div>';
+    if (p.custom) html += '<button type="button" class="btn danger wide del" data-act="poi-delete" data-id="' + esc(p.id) + '">Excluir este ponto</button>';
     return html + '</div>';
   }
 

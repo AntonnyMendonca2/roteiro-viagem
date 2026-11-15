@@ -24,9 +24,14 @@
   D.info.forEach(i => { infoById[i.id] = i; });
 
   App.city = id => cityById[id];
-  App.poi = id => poiById[id];
+  // Pontos de interesse = os do data.js + os criados pelo usuário (App.state.customPois, id "u-…").
+  const custom = () => (App.state && App.state.customPois) || [];
+  App.pois = () => (custom().length ? D.pois.concat(custom()) : D.pois);
+  App.poi = id => poiById[id] || custom().find(p => p.id === id);
   App.info = id => infoById[id];
-  App.poisOf = cityId => D.pois.filter(p => p.cityId === cityId);
+  const poisPorCidade = {};
+  D.pois.forEach(p => { (poisPorCidade[p.cityId] = poisPorCidade[p.cityId] || []).push(p); });
+  App.poisOf = cityId => (poisPorCidade[cityId] || []).concat(custom().filter(p => p.cityId === cityId));
 
   /* ------------------------------------------------------------- utilidades */
   const isObj = x => x !== null && typeof x === 'object' && !Array.isArray(x);
@@ -72,6 +77,8 @@
       cambioInfo: { data: '', fonte: '', ant: null, antData: '' },   // data da cotação e cotações anteriores
       cities: {}, pois: {}, legs: {}, gerais: {},
       tag: null,
+      customPois: [],                           // pontos criados pelo usuário (mesmo formato de DATA.pois)
+      ocultos: {},                              // sugestões ocultadas em "Descobrir por perto": { cidade: [títulos] }
       otim: { auto: true, criterio: 'tempo', fixarPontas: true }   // rota inteligente
     };
     D.cities.forEach(c => {
@@ -130,6 +137,16 @@
     if (!App.CRITERIOS[s.otim.criterio]) s.otim.criterio = 'tempo';
     s.otim.auto = !!s.otim.auto; s.otim.fixarPontas = !!s.otim.fixarPontas;
     if (s.cambioModo !== 'manual') s.cambioModo = 'auto';
+    // pontos do usuário: só os válidos, cada um com o seu estado (seleção, valor, dia)
+    s.customPois = (Array.isArray(s.customPois) ? s.customPois : []).filter(p => isObj(p) && /^u-/.test(p.id || '') && cityById[p.cityId] &&
+      isFinite(p.lat) && isFinite(p.lon) && p.nome && isObj(p.preco) && !poiById[p.id]);
+    s.customPois.forEach(p => {
+      p.custom = true; p.tags = Array.isArray(p.tags) ? p.tags : []; p.duracaoH = num(p.duracaoH) || 1;
+      if (!isObj(s.pois[p.id])) s.pois[p.id] = { sel: false, valor: { v: p.preco.v || 0, cur: p.preco.cur }, dia: '' };
+      if (!isObj(s.pois[p.id].valor)) s.pois[p.id].valor = { v: 0, cur: p.preco.cur };
+    });
+    Object.keys(s.pois).forEach(id => { if (/^u-/.test(id) && !s.customPois.some(p => p.id === id)) delete s.pois[id]; });
+    if (!isObj(s.ocultos)) s.ocultos = {};
     s.spread = Math.max(0, Math.min(30, num(s.spread)));
     return s;
   }
@@ -583,8 +600,8 @@
   /* ------------------------------------------------------ consultas derivadas */
   // Ponto "ativo" = selecionado E com a cidade no roteiro.
   App.poiActive = function (id) {
-    const p = poiById[id];
-    return !!(p && App.state.pois[id].sel && App.state.cities[p.cityId].sel);
+    const p = App.poi(id), ps = App.state.pois[id];
+    return !!(p && ps && ps.sel && App.state.cities[p.cityId].sel);
   };
 
   // Dias (datas) em que a cidade está no roteiro: da chegada até a partida.
@@ -760,7 +777,8 @@
   };
 
   App.togglePoi = function (id) {
-    const S = App.state, p = poiById[id], ps = S.pois[id];
+    const S = App.state, p = App.poi(id), ps = S.pois[id];
+    if (!p || !ps) return;
     const ativo = App.poiActive(id);
     if (ativo) ps.sel = false;
     else {
@@ -772,6 +790,26 @@
         UI.toast(cityById[p.cityId].nome + ' entrou no roteiro, ' + onde + '.');
       }
     }
+    App.refresh();
+  };
+
+  // Pontos criados pelo usuário ("Descobrir por perto", busca pelo nome, paisagens do trem).
+  App.addCustomPoi = function (p) {
+    const S = App.state;
+    S.customPois.push(p);
+    S.pois[p.id] = { sel: !!S.cities[p.cityId].sel, valor: { v: p.preco.v || 0, cur: p.preco.cur }, dia: '' };
+    MapView.rebuildPois();
+    App.refresh();
+    return p;
+  };
+
+  App.removeCustomPoi = function (id) {
+    const S = App.state, p = App.poi(id);
+    if (!p || !p.custom) return;
+    S.customPois = S.customPois.filter(x => x.id !== id);
+    delete S.pois[id];
+    if (App.focus && App.focus.type === 'poi' && App.focus.id === id) App.focus = { type: 'city', id: p.cityId };
+    MapView.rebuildPois();
     App.refresh();
   };
 
@@ -872,6 +910,7 @@
     App.state = sanitize(merge(defaults(), src));
     App.focus = null;
     UI.hideDetail();
+    MapView.rebuildPois();
     App.refresh();
     MapView.reset();
     UI.toast('Roteiro importado.');
@@ -884,6 +923,7 @@
     App.state = defaults();
     App.focus = null;
     UI.hideDetail();
+    MapView.rebuildPois();
     App.refresh();
     MapView.reset();
     UI.toast('Roteiro padrão restaurado.');
@@ -898,6 +938,7 @@
     window.Cambio.bind();
     window.Trilhos.bind();
     window.Ape.bind();
+    window.Descobrir.bind();
     UI.renderAll();
     MapView.init();
     MapView.update();

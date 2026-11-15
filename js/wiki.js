@@ -30,13 +30,15 @@
     'politician', 'footballer', 'singer', 'actor', 'actress', 'writer', 'painter', 'composer', 'architect \\(', 'physician', 'general', 'king of', 'queen of',
     'people', 'family', 'language', 'dialect', 'cuisine', 'dish', 'political party', 'organi[sz]ation', 'association', 'trade union', 'ministry', 'agency',
     'football club', 'sports club', 'basketball', 'rugby', 'handball', 'cycling team', 'military unit', 'regiment', 'administrative division', 'constituency',
-    'canton of', 'arrondissement of', 'electoral', 'metro line', 'bus route', 'railway line', 'motorway', 'highway', 'road in'
+    'electoral', 'suppression', 'repression', 'metro line', 'bus route', 'railway line', 'motorway', 'highway', 'road in'
   ].join('|') + ')\\b', 'i');
   const ANO = /\b(1[0-9]{3}|20[0-9]{2})\b/;
 
   Wiki.ehLugar = function (item) {
     const t = item.titulo || '', d = item.desc || '';
-    if (TITULO_RUIM.test(t)) return false;
+    if (TITULO_RUIM.test(t) || /\barrondissement\b/i.test(t)) return false;
+    // divisões administrativas e bairros genéricos não são "atrações"
+    if (/^(\d+(st|nd|rd|th) )?(arrondissement|quartier|quarter|district|commune|municipality|neighbou?rhood|suburb|borough|administrative|former commune|human settlement|subdivision)\b/i.test(d)) return false;
     if (ANO.test(t)) return false;                       // "Paris Commune of 1871", "2015 attacks"
     if (/^\d/.test(d) || /\(\d{3,4}\s*[–-]/.test(d) || /\b(of|in|from|until|since) (1[0-9]{3}|20[0-9]{2})\b/i.test(d) || /\d{4}\s*[–-]\s*\d{4}/.test(d)) return false;   // períodos e pessoas
     if (DESC_RUIM.test(d)) return false;
@@ -57,6 +59,11 @@
     return Math.max(0, n);
   };
 
+  // Nota prévia de "atração" (antes de saber a popularidade): foto, artigo em português
+  // (sinal de lugar conhecido) e tipo de lugar pela descrição.
+  const ATRACAO = /\b(museum|gallery|palace|castle|cathedral|basilica|church|abbey|chapel|mosque|synagogue|temple|park|garden|tower|bridge|square|plaza|monument|memorial|fountain|theat(re|er)|opera|market|library|fortress|ruins?|zoo|aquarium|viewpoint|landmark|arcade|passage|cemetery|island|beach|lake|hill)\b/i;
+  Wiki.notaPrevia = i => (i.foto ? 2 : 0) + (i.pt ? 2 : 0) + (ATRACAO.test(i.desc || '') ? 1.5 : 0);
+
   /* ==================================================================== rede */
   const r4 = v => Math.round(v * 1e4) / 1e4;
 
@@ -75,10 +82,10 @@
   const PROPS = '&prop=pageimages|description|coordinates|langlinks&lllang=pt&lllimit=max&piprop=thumbnail&pithumbsize=200&pilimit=max&colimit=max&format=json&origin=*';
 
   // Lugares próximos de (lat, lon). O raio máximo da API é 10 km.
-  Wiki.geosearch = function (lat, lon, raio, limite) {
+  Wiki.geosearch = function (lat, lon, raio, limite, fila) {
     const la = lat.toFixed(3), lo = lon.toFixed(3), r = Math.min(10000, raio || 10000), n = limite || 50;
     const url = API + '?action=query&generator=geosearch&ggscoord=' + la + '|' + lo + '&ggsradius=' + r + '&ggslimit=' + n + PROPS;
-    return Net.getJSON(url, { fila: 'wiki', ttl: TTL, chave: 'geo:' + la + ',' + lo + ',' + r + ',' + n, reduzir: itens }).then(x => x.data);
+    return Net.getJSON(url, { fila: fila || 'wiki', ttl: TTL, timeout: 12000, chave: 'geo:' + la + ',' + lo + ',' + r + ',' + n, reduzir: itens }).then(x => x.data);
   };
 
   // Busca por nome (para "Adicionar ponto pelo nome").
@@ -88,20 +95,20 @@
   };
 
   // Média de acessos por mês (últimos 12 meses) de um artigo.
-  Wiki.acessos = function (titulo) {
+  Wiki.acessos = function (titulo, fila) {
     const d = new Date(), p2 = n => String(n).padStart(2, '0');
     const fim = d.getUTCFullYear() + p2(d.getUTCMonth() + 1) + '0100';
     const ini = (d.getUTCFullYear() - 1) + p2(d.getUTCMonth() + 1) + '0100';
     const url = 'https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/user/' +
       encodeURIComponent(titulo.replace(/ /g, '_')) + '/monthly/' + ini + '/' + fim;
-    return Net.getJSON(url, { fila: 'wiki', ttl: TTL, chave: 'views:' + titulo, reduzir: j => {
+    return Net.getJSON(url, { fila: fila || 'views', ttl: TTL, timeout: 8000, chave: 'views:' + titulo, reduzir: j => {
       const it = (j && j.items) || [];
       return it.length ? Math.round(it.reduce((s, x) => s + (x.views || 0), 0) / it.length) : 0;
     } }).then(x => x.data).catch(() => 0);
   };
 
-  // Acessos de vários artigos (a fila "wiki" já limita a 4 por vez). Devolve os itens com .views.
-  Wiki.comAcessos = function (lista) {
-    return Promise.all(lista.map(i => Wiki.acessos(i.titulo).then(v => Object.assign({}, i, { views: v }))));
+  // Acessos de vários artigos (a fila já limita a 4 por vez). Devolve os itens com .views.
+  Wiki.comAcessos = function (lista, fila) {
+    return Promise.all(lista.map(i => Wiki.acessos(i.titulo, fila).then(v => Object.assign({}, i, { views: v }))));
   };
 })();

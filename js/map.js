@@ -60,7 +60,7 @@
     svg.select('defs').append('clipPath').attr('id', 'cena-clip').append('circle').attr('r', CENA_R);
     scaleEl = document.getElementById('scale');
     attribEl = document.getElementById('attrib');
-    ['countries', 'hatch', 'routes', 'trips', 'walk', 'cenas', 'cities', 'pois', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
+    ['countries', 'hatch', 'routes', 'trips', 'walk', 'cenas', 'cities', 'sug', 'pois', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
       L[n] = root.append('g').attr('class', 'l-' + n);
     });
     card = document.getElementById('hovercard');
@@ -87,7 +87,7 @@
 
     const P = o => { const p = projection([o.lon, o.lat]); return { x: p[0], y: p[1] }; };
     cityPts = D.cities.map(c => Object.assign({ id: c.id, c }, P(c)));
-    poiPts = D.pois.map(p => Object.assign({ id: p.id, p }, P(p)));
+    poiPts = A().pois().map(p => Object.assign({ id: p.id, p }, P(p)));
     infoPts = D.info.map(i => Object.assign({ id: i.id, i }, P(i)));
     const pv = projection(VCP_LL);
     vcp = { id: 'vcp', x: pv[0], y: pv[1] };
@@ -406,6 +406,7 @@
         if (pickCb) return;                         // marcando hospedagem: o clique é do mapa
         e.stopPropagation();
         ripple(d);
+        if (type === 'sug') { showCard(type, d); clearTimeout(cardTimer); cardTimer = setTimeout(hideCard, 4000); return; }
         if (type === 'cena') { showCard(type, d); clearTimeout(cardTimer); cardTimer = setTimeout(hideCard, 4000); return; }
         if (type === 'city') A().openCity(d.id);
         else if (type === 'hosp') A().openCity(d.cityId);
@@ -436,6 +437,7 @@
       const c = A().city(d.cityId);
       return { nome: d.h.nome || 'Minha hospedagem', wiki: '', preco: c.nome, status: 'Hospedagem', on: true };
     }
+    if (type === 'sug') return { nome: d.nome, foto: d.foto, preco: 'Sugestão da Wikipedia', status: 'Não cadastrado', on: false, aviso: d.desc };
     if (type === 'cena') return { nome: d.nome, foto: d.foto, preco: 'Paisagem no caminho do trem', status: d.lado === 'dir' ? 'Janela direita' : 'Janela esquerda', on: false, aviso: d.desc };
     if (type === 'info') return { nome: d.i.nome, wiki: d.i.wiki, preco: 'Somente informativo', status: 'Não selecionável', on: false, aviso: d.i.aviso };
     return { nome: D.origem.nome, wiki: D.origem.wiki, preco: 'Aeroporto de Viracopos', status: 'Origem e destino', on: true };
@@ -653,7 +655,7 @@
         g.select('.hit').attr('r', big ? TH_R + 2 : 11);
         if (big && !this.__foto) {                  // carrega a foto só quando for exibida
           this.__foto = true;
-          window.Photos.get(d.p.wiki).then(src => {
+          (d.p.foto ? Promise.resolve(d.p.foto) : window.Photos.get(d.p.wiki)).then(src => {
             if (src) { g.select('image').attr('href', src); g.classed('has-img', true); }
             else this.__foto = false;
           });
@@ -704,12 +706,32 @@
     });
     place(cg);
 
+    // sugestões de "Descobrir por perto": losangos cinza (formato diferente dos pontos)
+    const ss = window.Descobrir.paraMapa().map(s => { const p = projection([s.lon, s.lat]); return Object.assign({ x: p[0], y: p[1] }, s); });
+    const sg = L.sug.selectAll('g.sug').data(ss, d => d.id).join(enter => {
+      const g = enter.append('g').attr('class', 'mk sug');
+      g.append('path').attr('class', 'dia').attr('d', 'M0,-6 L6,0 L0,6 L-6,0 Z');
+      g.append('circle').attr('class', 'hit').attr('r', 11);
+      bindPoint(g, 'sug');
+      return g;
+    });
+    place(sg);
+
     countryState();
 
     if (ready) {
       const sig = calc.legs.map(l => l.key + ':' + l.modo).join('|');
       if (sig !== routeSig) { routeSig = sig; drawRoutes(true); }
     }
+  };
+
+  // A lista de pontos mudou (ponto criado ou excluído pelo usuário, importação): refaz os marcadores.
+  M.rebuildPois = function () {
+    if (!projection) return;
+    poiPts = A().pois().map(p => { const q = projection([p.lon, p.lat]); return { id: p.id, p, x: q[0], y: q[1] }; });
+    poiSig = null;
+    L.pois.selectAll('g.poi').remove();
+    drawPois();
   };
 
   // Caminho a pé no mapa (cor de destaque). coords = [[lon, lat], ...]; null apaga.

@@ -249,6 +249,10 @@ small { font-weight: 400; color: var(--muted); }
 .lvl-city .trip.off { opacity: .08; }
 .trip.sel { stroke: var(--accent); }
 
+/* sugestões de "Descobrir por perto": losangos cinza */
+.sug .dia { fill: #4a4a4a; stroke: #cfcfcf; stroke-width: 1.3px; }
+.sug:hover .dia { fill: #8a8a8a; stroke: #fff; }
+
 /* caminho a pé ("Como chegar a pé" e trajeto do dia) */
 .walk { fill: none; stroke: var(--accent); stroke-width: calc(3.2px / var(--k)); stroke-linecap: round; stroke-linejoin: round; pointer-events: none; filter: drop-shadow(0 0 calc(2px / var(--k)) rgba(0, 0, 0, .9)); }
 
@@ -610,6 +614,22 @@ details.more > summary:hover { color: #fff; }
 .pack ul { margin: 0 0 6px; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 5px; }
 .pack li { background: var(--panel-3); border-radius: 999px; padding: 2px 9px; font-size: 12px; }
 .pack small { display: block; font-size: 11.5px; }
+
+/* descobrir por perto */
+.sugs { list-style: none; margin: 8px 0; padding: 0; }
+.sug { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+li.sug .sug-ph { width: 64px; height: 64px; border-radius: 10px; flex: none; }
+.sug-ph span { font-size: 16px; }
+.sug-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sug-t b { font-size: 13.5px; font-weight: 600; }
+.sug-t span { font-size: 12px; color: #c4c4c4; }
+.sug-t small { font-size: 11.5px; }
+.sug-b { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.sug-b .btn { text-decoration: none; }
+.mine { font-style: normal; font-size: 9.5px; text-transform: uppercase; letter-spacing: .06em; border: 1px solid #555; color: #b5b5b5; border-radius: 5px; padding: 0 4px; vertical-align: 1px; }
+.btn.del { margin-top: 18px; }
+.sc-ok { color: var(--accent); font-weight: 700; padding: 0 6px; }
+.scenes .btn.sm { flex: none; padding: 3px 9px; font-size: 14px; }
 
 /* ============================================================ LINHA DO TEMPO */
 #timeline {
