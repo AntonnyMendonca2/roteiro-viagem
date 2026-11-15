@@ -309,6 +309,17 @@
     442: ['CFL', 'https://www.cfl.lu'], 440: ['LTG Link', 'https://ltglink.lt'], 428: ['Vivi', 'https://www.vivi.lv']
   };
 
+  // Busca da Eurostar já preenchida (códigos UIC das estações usados pelo site).
+  const EUROSTAR = { londres: '7015400', paris: '8727100', bruxelas: '8814001', amsterda: '8400058', colonia: '8015458' };
+  Trilhos.linkCompra = function (leg, nome, url) {
+    const o = EUROSTAR[leg.from], d = EUROSTAR[leg.to];
+    if (!/eurostar\.com/i.test(url) || !o || !d) return url;
+    const App = A(), seg = App.calc && App.calc.segByCity[leg.to];
+    const data = seg ? seg.start : App.parseDate(App.state.dataSaida);
+    return 'https://www.eurostar.com/search/uk-en?adult=' + (D.config.viajantes || 1) + '&origin=' + o + '&destination=' + d +
+      (data ? '&outbound=' + App.iso(data) : '');
+  };
+
   function hora(iso, tz) {
     try { return new Intl.DateTimeFormat('pt-BR', { timeZone: tz || 'UTC', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)); }
     catch (e) { return iso.slice(11, 16); }
@@ -385,7 +396,7 @@
       const links = [];
       h.itens.forEach(i => { if (i.url && /^https?:\/\//.test(i.url) && !links.some(l => l[1] === i.url)) links.push([i.operadora || 'Operadora', i.url]); });
       if (!links.length && op) links.push(op);
-      if (links.length) html += '<div class="links tight">' + links.slice(0, 2).map(l => '<a class="btn" href="' + esc(l[1]) + '" target="_blank" rel="noopener noreferrer">Comprar: ' + esc(l[0]) + ' ↗</a>').join('') + '</div>';
+      if (links.length) html += '<div class="links tight">' + links.slice(0, 2).map(l => '<a class="btn" href="' + esc(Trilhos.linkCompra(leg, l[0], l[1])) + '" target="_blank" rel="noopener noreferrer">Comprar: ' + esc(l[0]) + ' ↗</a>').join('') + '</div>';
       html += '<p class="muted">Fonte: Transitous. Confira no site da operadora antes de comprar.</p>';
     }
 

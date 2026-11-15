@@ -201,6 +201,17 @@
   /* --------------------------------------------------- trens e paisagens */
   grupo('Rota real dos trens e paisagens');
 
+  teste('Comprar na Eurostar abre a busca já preenchida (estações, data e passageiros)', () => {
+    const leg = { from: 'londres', to: 'paris' }, seg = App.calc && App.calc.segByCity.paris;
+    const u = window.Trilhos.linkCompra(leg, 'Eurostar', 'https://www.eurostar.com');
+    ok(/^https:\/\/www\.eurostar\.com\/search\/uk-en\?/.test(u), 'página de busca');
+    ok(/origin=7015400/.test(u) && /destination=8727100/.test(u), 'St Pancras → Gare du Nord');
+    ok(/adult=\d+/.test(u), 'passageiros');
+    if (seg) ok(u.indexOf('outbound=' + App.iso(seg.start)) >= 0, 'data do trecho');
+    igual(window.Trilhos.linkCompra(leg, 'SNCF', 'https://www.sncf-connect.com'), 'https://www.sncf-connect.com');
+    igual(window.Trilhos.linkCompra({ from: 'paris', to: 'nice' }, 'Eurostar', 'https://www.eurostar.com'), 'https://www.eurostar.com');
+  });
+
   teste('Lado da janela: linha para o leste, lugar ao norte = esquerda; ao sul = direita', () => {
     const linha = [[0, 45], [1, 45], [2, 45]];
     const norte = window.Trilhos.lado(linha, { lat: 45.05, lon: 0.5 }), sul = window.Trilhos.lado(linha, { lat: 44.95, lon: 1.5 });
