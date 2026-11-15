@@ -521,6 +521,14 @@
   }
   function hideTip() { if (tip) tip.classList.remove('show'); }
 
+  // Ponto vira círculo com foto se a cidade dele está aberta e ele fica a até
+  // DATA.config.raioFotosKm do centro (os mais distantes continuam como pontinhos).
+  function fotoNoMapa(d, aberta) {
+    if (d.p.cityId !== aberta) return false;
+    if (d.km == null) d.km = A().distKm(A().city(d.p.cityId), d.p);
+    return d.km <= (D.config.raioFotosKm || 5);
+  }
+
   /* ====================================================== estado → aparência */
   M.update = function () {
     const App = A(), S = App.state, calc = App.calc, tag = S.tag;
@@ -542,9 +550,9 @@
       .classed('sel', d => App.poiActive(d.id))
       .classed('off', d => !!tag && d.p.tags.indexOf(tag) < 0)
       .classed('focus', d => !!f && f.type === 'poi' && f.id === d.id)
-      .classed('big', d => d.p.cityId === aberta)
+      .classed('big', d => fotoNoMapa(d, aberta))
       .each(function (d) {
-        const g = d3.select(this), w = App.poiWarn(d.p), big = d.p.cityId === aberta;
+        const g = d3.select(this), w = App.poiWarn(d.p), big = fotoNoMapa(d, aberta);
         g.classed('warn', !!w).classed('warn-forte', !!w && w.nivel === 'forte');
         // posições do aviso "!", do nome e do pulso conforme o tamanho do marcador
         g.select('.wbadge').attr('x', big ? TH_R - 4 : 6).attr('y', big ? -TH_R + 4 : -5);
@@ -561,8 +569,8 @@
       });
     // ordem de desenho: pontos da cidade aberta por cima; selecionados por cima dos demais
     pois.filter(d => App.poiActive(d.id)).raise();
-    pois.filter(d => d.p.cityId === aberta && !App.poiActive(d.id)).raise();
-    pois.filter(d => d.p.cityId === aberta && App.poiActive(d.id)).raise();
+    pois.filter(d => fotoNoMapa(d, aberta) && !App.poiActive(d.id)).raise();
+    pois.filter(d => fotoNoMapa(d, aberta) && App.poiActive(d.id)).raise();
 
     L.trips.selectAll('path')
       .classed('sel', d => App.poiActive(d.id))

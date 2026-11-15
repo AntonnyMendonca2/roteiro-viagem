@@ -15,6 +15,7 @@ window.DATA = {
     iof: false,                       // somar IOF em valores em moeda estrangeira
     iofPct: 3.5,                      // percentual do IOF
     noitesVooIda: 1,                  // noite passada em voo na ida (Brasil → Europa)
+    raioFotosKm: 5,                  // pontos até esta distância do centro viram foto no mapa
     viajantes: 1,                     // nº de pessoas nas buscas de voos e hospedagem
     hospedagemPernoite: { v: 80, cur: 'EUR' }  // estimativa de 1 noite em parada de trem
   },
