@@ -89,6 +89,10 @@ small { font-weight: 400; color: var(--muted); }
   transition: fill .4s ease;
 }
 .country.active { fill: var(--land-active); stroke: #777; }
+.country { cursor: pointer; }
+.country:hover { fill: #2e2e2e; }
+.country.active:hover { fill: #686868; }
+#map.picking, #map.picking * { cursor: crosshair !important; }
 /* com zoom na cidade o país escurece um pouco, para os pontos terem contraste */
 .lvl-city .country.active { fill: #383838; stroke: #555; }
 .hatch { fill: url(#hatch); pointer-events: none; }
@@ -153,6 +157,12 @@ small { font-weight: 400; color: var(--muted); }
 .poi .wbadge { display: none; font-size: 11px; font-weight: 700; fill: #fff; paint-order: stroke; stroke: var(--bg); stroke-width: 3px; }
 .poi.warn .wbadge { display: block; }
 .poi.warn-forte .wbadge { fill: var(--accent); font-size: 14px; }
+
+/* minha hospedagem (só no zoom da cidade) */
+.hosp { opacity: 0; visibility: hidden; transition: opacity .35s ease, visibility .35s; }
+.lvl-city .hosp { opacity: 1; visibility: visible; }
+.hosp .dot { fill: var(--accent); stroke: var(--bg); stroke-width: 1.5px; filter: drop-shadow(0 0 6px var(--accent)); }
+.hosp path { fill: var(--accent-ink); pointer-events: none; }
 
 /* área informativa */
 .info .tri { fill: var(--panel); stroke: #b5b5b5; stroke-width: 1.4px; stroke-linejoin: round; }
@@ -553,6 +563,37 @@ input:focus, select:focus { outline: none; border-color: var(--accent); backgrou
 .hc-name { font-weight: 600; font-size: 13.5px; line-height: 1.25; }
 .hc-meta { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: #c4c4c4; }
 .hc-warn { margin-top: 7px; font-size: 11.5px; color: #e4e4e4; border-left: 2px solid var(--accent); padding-left: 7px; }
+
+/* card de passagens (clique no país) */
+#flightcard {
+  position: fixed; z-index: 32; max-height: calc(100vh - 24px); overflow-y: auto;
+  background: var(--panel); border: 1px solid #343434; border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 12px 14px 12px; display: none;
+}
+#flightcard.show { display: block; animation: rise .22s ease; }
+.fc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 4px; }
+.fc-head h3 { margin: 2px 0 0; font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.fc-x { border: 0; background: var(--panel-2); color: #bbb; width: 28px; height: 28px; border-radius: 8px; font-size: 18px; line-height: 1; flex: none; }
+.fc-x:hover { color: #fff; background: var(--panel-3); }
+#flightcard .muted { margin-top: 10px; font-size: 11.5px; }
+.fl-row { padding: 9px 0; border-bottom: 1px solid var(--line); }
+.fl-row:last-of-type { border-bottom: 0; }
+.fl-t b { display: block; font-size: 13px; font-weight: 600; }
+.fl-t small { font-size: 11.5px; }
+.links.tight { margin-top: 7px; gap: 6px; }
+.links.tight .btn { padding: 6px 10px; font-size: 12px; }
+
+/* hospedagem no painel da cidade */
+.hosp-box { margin-top: 10px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); }
+.hosp-box .field { margin: 0 0 8px; }
+.hosp-box .field:last-child { margin: 10px 0 0; }
+input[type=text] {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; width: 100%; min-width: 0;
+  transition: border-color .2s, background .2s;
+}
+input[type=text]:focus { outline: none; border-color: var(--accent); }
+.btn.wide { width: 100%; }
+.hosp-ok { font-size: 12.5px; color: var(--accent); }
 
 #tip {
   position: fixed; z-index: 31; pointer-events: none; max-width: 260px;

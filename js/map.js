@@ -36,10 +36,12 @@
   let projection, geoPath, zoom, T = d3.zoomIdentity;
   let features = null, ready = false, routeSig = null;
   let cityPts = [], poiPts = [], infoPts = [], vcp = { id: 'vcp', x: 0, y: 0 }, pxKm = 1;
-  let mover = null, drawTimer = null, cardTimer = null, lastPointer = 'mouse';
+  let mover = null, drawTimer = null, cardTimer = null, lastPointer = 'mouse', pickCb = null;
   let card, tip;
 
   const esc = s => window.UI.esc(s);
+  // ícone de casa (Material Icons "home", Apache 2.0)
+  const HOUSE = 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z';
   const place = sel => sel.attr('transform', d => 'translate(' + d.x + ',' + d.y + ') scale(' + (1 / T.k) + ')');
 
   /* ====================================================================== init */
@@ -51,7 +53,7 @@
     root = svg.append('g').attr('class', 'zoom-layer');
     scaleEl = document.getElementById('scale');
     attribEl = document.getElementById('attrib');
-    ['countries', 'hatch', 'routes', 'trips', 'cities', 'pois', 'info', 'mover', 'fx'].forEach(n => {
+    ['countries', 'hatch', 'routes', 'trips', 'cities', 'pois', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
       L[n] = root.append('g').attr('class', 'l-' + n);
     });
     card = document.getElementById('hovercard');
@@ -59,7 +61,7 @@
 
     zoom = d3.zoom().scaleExtent([0.7, 30000]).on('zoom', onZoom);
     svg.call(zoom).on('dblclick.zoom', null);
-    svg.on('click', hideCard);
+    svg.on('click', onMapClick);
     window.addEventListener('pointerdown', e => { lastPointer = e.pointerType || 'mouse'; }, true);
 
     layout();
@@ -98,7 +100,7 @@
   // Troca suave: países (zoom afastado) ↔ mapa de ruas (zoom próximo).
   function mapLayers() {
     const f = Math.max(0, Math.min(1, (T.k - TILE_FADE[0]) / (TILE_FADE[1] - TILE_FADE[0])));
-    L.countries.style('opacity', 1 - f);
+    L.countries.style('opacity', 1 - f).style('pointer-events', f > 0.5 ? 'none' : null);
     L.hatch.style('opacity', 1 - f * 0.6);
     tilesG.style('opacity', f);
     if (attribEl) attribEl.classList.toggle('on', f > 0);
@@ -172,7 +174,13 @@
   /* ==================================================================== países */
   function drawCountries() {
     if (!features) return;
-    L.countries.selectAll('path').data(features).join('path').attr('class', 'country').attr('d', geoPath);
+    L.countries.selectAll('path').data(features).join('path').attr('class', 'country').attr('d', geoPath)
+      .on('click', (e, d) => {                     // clique no país → card de passagens aéreas
+        if (pickCb) return;
+        e.stopPropagation();
+        hideCard();
+        window.UI.showCountryCard(+d.id, (d.properties && d.properties.name) || '', e.clientX, e.clientY);
+      });
     L.hatch.selectAll('path').data(features.filter(f => +f.id === D.infoArea.paisIso)).join('path').attr('class', 'hatch').attr('d', geoPath);
     countryState();
   }
@@ -205,6 +213,32 @@
       window.UI.toast('Não foi possível carregar o contorno dos países (sem internet?). O roteiro continua funcionando.');
       done();
     });
+  };
+
+  /* ======================================== clique no mapa / marcar hospedagem */
+  function onMapClick(e) {
+    if (pickCb) {
+      const p = d3.pointer(e, root.node()), ll = projection.invert(p);
+      const cb = pickCb;
+      M.cancelPick();
+      if (ll && isFinite(ll[0]) && isFinite(ll[1])) cb(ll[1], ll[0]);
+      return;
+    }
+    hideCard();
+    window.UI.hideCountryCard();
+  }
+
+  // Próximo clique no mapa devolve (lat, lon) para o callback.
+  M.pick = function (cb) { pickCb = cb; node.classList.add('picking'); hideCard(); window.UI.hideCountryCard(); };
+  M.cancelPick = function () { pickCb = null; node.classList.remove('picking'); };
+  M.picking = () => !!pickCb;
+
+  // Zoom até a hospedagem marcada.
+  M.showHosp = function (cityId) {
+    const h = A().hosp(cityId);
+    if (!h) return;
+    const p = projection([h.lon, h.lat]);
+    go(Math.max(T.k, PX_KM_STREET / localPxKm(h.lat)), p[0], p[1], 900);
   };
 
   /* ================================================================ marcadores */
@@ -281,9 +315,11 @@
     sel.on('pointerenter', (e, d) => { if (e.pointerType === 'mouse') showCard(type, d); })
       .on('pointerleave', e => { if (e.pointerType === 'mouse') hideCard(); })
       .on('click', (e, d) => {
+        if (pickCb) return;                         // marcando hospedagem: o clique é do mapa
         e.stopPropagation();
         ripple(d);
         if (type === 'city') A().openCity(d.id);
+        else if (type === 'hosp') A().openCity(d.cityId);
         else if (type === 'poi') A().openPoi(d.id);
         else if (type === 'info') A().openInfo(d.id);
         // no toque não existe hover: o card aparece junto com o clique (se couber acima do ponto)
@@ -307,6 +343,10 @@
       const p = d.p, on = App.poiActive(p.id), w = App.poiWarn(p);
       return { nome: p.nome, wiki: p.wiki, preco: p.preco.label + ' · ' + window.UI.dist(p).curto, status: on ? 'Selecionado' : 'Não selecionado', on, aviso: w ? w.texto : '' };
     }
+    if (type === 'hosp') {
+      const c = A().city(d.cityId);
+      return { nome: d.h.nome || 'Minha hospedagem', wiki: '', preco: c.nome, status: 'Hospedagem', on: true };
+    }
     if (type === 'info') return { nome: d.i.nome, wiki: d.i.wiki, preco: 'Somente informativo', status: 'Não selecionável', on: false, aviso: d.i.aviso };
     return { nome: D.origem.nome, wiki: D.origem.wiki, preco: 'Aeroporto de Viracopos', status: 'Origem e destino', on: true };
   }
@@ -314,7 +354,7 @@
   function showCard(type, d) {
     const i = describe(type, d);
     clearTimeout(cardTimer);
-    card.innerHTML = window.UI.photo(i.wiki, i.nome) +
+    card.innerHTML = (i.wiki ? window.UI.photo(i.wiki, i.nome) : '') +
       '<div class="hc-body"><div class="hc-name">' + esc(i.nome) + '</div>' +
       '<div class="hc-meta"><span>' + esc(i.preco) + '</span><span class="st ' + (i.on ? 'on' : '') + '">' + esc(i.status) + '</span></div>' +
       (i.aviso ? '<div class="hc-warn">' + esc(i.aviso) + '</div>' : '') + '</div>';
@@ -382,7 +422,7 @@
         gHit.append('path').attr('class', 'route-hit').attr('d', geo.d)
           .on('pointerenter pointermove', e => { p.classed('hover', true); showTip(e, leg, modo, active); })
           .on('pointerleave', () => { p.classed('hover', false); hideTip(); })
-          .on('click', e => { e.stopPropagation(); showTip(e, leg, modo, active); if (lastPointer !== 'mouse') setTimeout(() => { p.classed('hover', false); hideTip(); }, 2600); });
+          .on('click', e => { if (pickCb) return; e.stopPropagation(); showTip(e, leg, modo, active); if (lastPointer !== 'mouse') setTimeout(() => { p.classed('hover', false); hideTip(); }, 2600); });
         if (active) {
           segs.push({ el: p.node(), modo });
           const b = gMk.append('g').attr('class', 'mk badge').datum(geo.mid);
@@ -498,6 +538,21 @@
       .classed('sel', d => App.poiActive(d.id))
       .classed('off', d => !!tag && d.p.tags.indexOf(tag) < 0);
 
+    // minha hospedagem (ícone de casa) nas cidades do roteiro
+    const hs = calc.route.map(id => ({ id, h: App.hosp(id) })).filter(o => o.h).map(o => {
+      const p = projection([o.h.lon, o.h.lat]);
+      return { id: 'hosp-' + o.id, cityId: o.id, h: o.h, x: p[0], y: p[1] };
+    });
+    const hg = L.hosp.selectAll('g.hosp').data(hs, d => d.id).join(enter => {
+      const g = enter.append('g').attr('class', 'mk hosp');
+      g.append('circle').attr('class', 'dot').attr('r', 10);
+      g.append('path').attr('d', HOUSE).attr('transform', 'translate(-7.2,-7.6) scale(0.6)');
+      g.append('circle').attr('class', 'hit').attr('r', 14);
+      bindPoint(g, 'hosp');
+      return g;
+    });
+    place(hg);
+
     countryState();
 
     if (ready) {
@@ -519,6 +574,7 @@
     document.body.classList.toggle('zoomed', T.k > 1.03 || Math.abs(T.x) > 3 || Math.abs(T.y) > 3);
     hideCard();
     hideTip();
+    if (e.sourceEvent) window.UI.hideCountryCard();   // arrastar/rolar o mapa fecha o card do país
   }
 
   function go(k, cx, cy, dur) {

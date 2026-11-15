@@ -15,6 +15,7 @@ window.DATA = {
     iof: false,                       // somar IOF em valores em moeda estrangeira
     iofPct: 3.5,                      // percentual do IOF
     noitesVooIda: 1,                  // noite passada em voo na ida (Brasil → Europa)
+    viajantes: 1,                     // nº de pessoas nas buscas de voos e hospedagem
     hospedagemPernoite: { v: 80, cur: 'EUR' }  // estimativa de 1 noite em parada de trem
   },
 
@@ -60,6 +61,7 @@ window.DATA = {
     id: 'vcp',
     nome: 'Campinas – VCP',
     nomeCurto: 'Campinas (VCP)',
+    iata: 'VCP',
     lat: -23.0074, lon: -47.1345,   // usado na rota inteligente sem pontas fixas
     wiki: 'Viracopos International Airport',
     viaIda: 'lisboa',      // a ida é desenhada passando por esta cidade
@@ -73,25 +75,26 @@ window.DATA = {
   },
 
   /* ---------------------------------------------------------------- cidades
-     rotulo: posição do nome no mapa (n, s, e, w) · paisIso: código ISO numérico */
+     rotulo: posição do nome no mapa (n, s, e, w) · paisIso: código ISO numérico
+     iata: código da cidade/aeroporto (buscas de voo) · hostelworld: país/cidade no site do Hostelworld */
   cities: [
-    { id: 'londres',    nome: 'Londres',    pais: 'Reino Unido', paisIso: 826, lat: 51.5074, lon: -0.1278, moeda: 'GBP', wiki: 'London',     selecionada: true,  noites: 3, ordem: 1, rotulo: 'w',
+    { id: 'londres',    nome: 'Londres',    pais: 'Reino Unido', paisIso: 826, lat: 51.5074, lon: -0.1278, moeda: 'GBP', wiki: 'London', iata: 'LON', hostelworld: 'england/london',     selecionada: true,  noites: 3, ordem: 1, rotulo: 'w',
       tremSoListado: true,   // de trem, só sai pelo Eurostar: pares não listados passam por Paris
       nota: 'O Reino Unido não devolve imposto (tax free) para turistas. Brasileiros precisam da ETA para entrar.' },
-    { id: 'paris',      nome: 'Paris',      pais: 'França',      paisIso: 250, lat: 48.8566, lon: 2.3522,  moeda: 'EUR', wiki: 'Paris',      selecionada: true,  noites: 4, ordem: 2, rotulo: 'w',
+    { id: 'paris',      nome: 'Paris',      pais: 'França',      paisIso: 250, lat: 48.8566, lon: 2.3522,  moeda: 'EUR', wiki: 'Paris', iata: 'PAR', hostelworld: 'france/paris',      selecionada: true,  noites: 4, ordem: 2, rotulo: 'w',
       nota: 'Devolução de imposto (détaxe) de ~10–12% em compras acima de €100 na mesma loja e no mesmo dia.' },
-    { id: 'cracovia',   nome: 'Cracóvia',   pais: 'Polônia',     paisIso: 616, lat: 50.0647, lon: 19.9450, moeda: 'PLN', wiki: 'Kraków',     selecionada: true,  noites: 3, ordem: 3, rotulo: 'e' },
-    { id: 'berlim',     nome: 'Berlim',     pais: 'Alemanha',    paisIso: 276, lat: 52.5200, lon: 13.4050, moeda: 'EUR', wiki: 'Berlin',     selecionada: false, noites: 2, rotulo: 'n',
+    { id: 'cracovia',   nome: 'Cracóvia',   pais: 'Polônia',     paisIso: 616, lat: 50.0647, lon: 19.9450, moeda: 'PLN', wiki: 'Kraków', iata: 'KRK', hostelworld: 'poland/krakow',     selecionada: true,  noites: 3, ordem: 3, rotulo: 'e' },
+    { id: 'berlim',     nome: 'Berlim',     pais: 'Alemanha',    paisIso: 276, lat: 52.5200, lon: 13.4050, moeda: 'EUR', wiki: 'Berlin', iata: 'BER', hostelworld: 'germany/berlin',     selecionada: false, noites: 2, rotulo: 'n',
       papel: 'Parada do trem Paris → Cracóvia' },
-    { id: 'munique',    nome: 'Munique',    pais: 'Alemanha',    paisIso: 276, lat: 48.1351, lon: 11.5820, moeda: 'EUR', wiki: 'Munich',     selecionada: false, noites: 2, rotulo: 'n' },
-    { id: 'lisboa',     nome: 'Lisboa',     pais: 'Portugal',    paisIso: 620, lat: 38.7223, lon: -9.1393, moeda: 'EUR', wiki: 'Lisbon',     selecionada: false, noites: 1, rotulo: 'e',
+    { id: 'munique',    nome: 'Munique',    pais: 'Alemanha',    paisIso: 276, lat: 48.1351, lon: 11.5820, moeda: 'EUR', wiki: 'Munich', iata: 'MUC', hostelworld: 'germany/munich',     selecionada: false, noites: 2, rotulo: 'n' },
+    { id: 'lisboa',     nome: 'Lisboa',     pais: 'Portugal',    paisIso: 620, lat: 38.7223, lon: -9.1393, moeda: 'EUR', wiki: 'Lisbon', iata: 'LIS', hostelworld: 'portugal/lisbon',     selecionada: false, noites: 1, rotulo: 'e',
       papel: 'Conexão aérea' },
-    { id: 'zurique',    nome: 'Zurique',    pais: 'Suíça',       paisIso: 756, lat: 47.3769, lon: 8.5417,  moeda: 'CHF', wiki: 'Zurich',     selecionada: false, noites: 2, rotulo: 'w' },
-    { id: 'viena',      nome: 'Viena',      pais: 'Áustria',     paisIso: 40,  lat: 48.2082, lon: 16.3738, moeda: 'EUR', wiki: 'Vienna',     selecionada: false, noites: 2, rotulo: 'w' },
-    { id: 'bratislava', nome: 'Bratislava', pais: 'Eslováquia',  paisIso: 703, lat: 48.1486, lon: 17.1077, moeda: 'EUR', wiki: 'Bratislava', selecionada: false, noites: 1, rotulo: 'e' },
-    { id: 'budapeste',  nome: 'Budapeste',  pais: 'Hungria',     paisIso: 348, lat: 47.4979, lon: 19.0402, moeda: 'HUF', wiki: 'Budapest',   selecionada: false, noites: 2, rotulo: 'e' },
-    { id: 'roma',       nome: 'Roma',       pais: 'Itália',      paisIso: 380, lat: 41.9028, lon: 12.4964, moeda: 'EUR', wiki: 'Rome',       selecionada: false, noites: 3, rotulo: 'e' },
-    { id: 'atenas',     nome: 'Atenas',     pais: 'Grécia',      paisIso: 300, lat: 37.9838, lon: 23.7275, moeda: 'EUR', wiki: 'Athens',     selecionada: false, noites: 2, rotulo: 'e',
+    { id: 'zurique',    nome: 'Zurique',    pais: 'Suíça',       paisIso: 756, lat: 47.3769, lon: 8.5417,  moeda: 'CHF', wiki: 'Zurich', iata: 'ZRH', hostelworld: 'switzerland/zurich',     selecionada: false, noites: 2, rotulo: 'w' },
+    { id: 'viena',      nome: 'Viena',      pais: 'Áustria',     paisIso: 40,  lat: 48.2082, lon: 16.3738, moeda: 'EUR', wiki: 'Vienna', iata: 'VIE', hostelworld: 'austria/vienna',     selecionada: false, noites: 2, rotulo: 'w' },
+    { id: 'bratislava', nome: 'Bratislava', pais: 'Eslováquia',  paisIso: 703, lat: 48.1486, lon: 17.1077, moeda: 'EUR', wiki: 'Bratislava', iata: 'BTS', hostelworld: 'slovakia/bratislava', selecionada: false, noites: 1, rotulo: 'e' },
+    { id: 'budapeste',  nome: 'Budapeste',  pais: 'Hungria',     paisIso: 348, lat: 47.4979, lon: 19.0402, moeda: 'HUF', wiki: 'Budapest', iata: 'BUD', hostelworld: 'hungary/budapest',   selecionada: false, noites: 2, rotulo: 'e' },
+    { id: 'roma',       nome: 'Roma',       pais: 'Itália',      paisIso: 380, lat: 41.9028, lon: 12.4964, moeda: 'EUR', wiki: 'Rome', iata: 'ROM', hostelworld: 'italy/rome',       selecionada: false, noites: 3, rotulo: 'e' },
+    { id: 'atenas',     nome: 'Atenas',     pais: 'Grécia',      paisIso: 300, lat: 37.9838, lon: 23.7275, moeda: 'EUR', wiki: 'Athens', iata: 'ATH', hostelworld: 'greece/athens',     selecionada: false, noites: 2, rotulo: 'e',
       semTrem: true }
   ],
 

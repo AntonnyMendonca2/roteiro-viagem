@@ -74,7 +74,8 @@
     D.cities.forEach(c => {
       const custos = {};
       D.categorias.forEach(k => { custos[k.id] = { v: '', cur: 'BRL' }; });
-      s.cities[c.id] = { sel: !!c.selecionada, noites: c.noites || 1, ordem: c.ordem || 99, custos };
+      s.cities[c.id] = { sel: !!c.selecionada, noites: c.noites || 1, ordem: c.ordem || 99, custos,
+        hosp: { nome: '', lat: null, lon: null } };   // minha hospedagem (marcada no mapa)
     });
     D.pois.forEach(p => {
       const ps = { sel: !!p.selecionado, valor: { v: p.preco.v, cur: p.preco.cur }, dia: '' };
@@ -477,6 +478,43 @@
     return { nivel: 'leve', datas: ruins.map(App.iso), texto: 'Fechado às ' + quais + ' — evite ' + ruins.map(fmt).join(' e ') + ' na sua estadia.' };
   };
 
+  /* ------------------------------------------------------- voos e hospedagem */
+  // Hospedagem marcada pelo usuário na cidade (ou null).
+  App.hosp = function (cityId) {
+    const h = App.state.cities[cityId] && App.state.cities[cityId].hosp;
+    return h && h.lat != null && h.lon != null && isFinite(h.lat) && isFinite(h.lon) ? h : null;
+  };
+
+  App.setHosp = function (cityId, lat, lon) {
+    const h = App.state.cities[cityId].hosp;
+    h.lat = lat == null ? null : Math.round(lat * 1e6) / 1e6;
+    h.lon = lon == null ? null : Math.round(lon * 1e6) / 1e6;
+    App.refresh();
+  };
+
+  // Marca a hospedagem clicando no mapa.
+  App.pickHosp = function (cityId) {
+    document.body.classList.remove('drawer-open');          // no celular, libera o mapa
+    UI.toast('Clique no mapa onde fica a sua hospedagem em ' + cityById[cityId].nome + ' (Esc cancela).', 15000);
+    MapView.pick((lat, lon) => {
+      App.setHosp(cityId, lat, lon);
+      UI.toast('Hospedagem marcada. As distâncias agora são medidas a partir dela.');
+      if (App.focus) UI.showDetail();
+    });
+  };
+
+  // Voos para uma cidade: da cidade anterior do roteiro (ou de Viracopos) na data de chegada;
+  // se for a última cidade, inclui também a volta para Viracopos.
+  App.flightsFor = function (cityId) {
+    const c = App.calc, r = c.route, i = r.indexOf(cityId), saida = App.parseDate(App.state.dataSaida);
+    const legOf = (a, b) => c.legs.find(l => l.from === a && l.to === b);
+    if (i < 0) return [{ from: 'vcp', to: cityId, date: saida, fora: true }];
+    const from = i === 0 ? 'vcp' : r[i - 1];
+    const rows = [{ from, to: cityId, date: i === 0 ? saida : c.segByCity[cityId].start, leg: legOf(from, cityId) }];
+    if (i === r.length - 1) rows.push({ from: cityId, to: 'vcp', date: c.segs[c.segs.length - 1].start, leg: legOf(cityId, 'vcp') });
+    return rows;
+  };
+
   /* --------------------------------------------------------------- atualização */
   // modo 'light': só números (não recria formulários, para não perder o foco ao digitar).
   // Margem para considerar uma ordem "melhor" (evita reordenar por diferenças desprezíveis).
@@ -712,6 +750,8 @@
       if (e.key !== 'Escape') return;
       const el = document.activeElement;
       if (el && /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) el.blur();
+      if (MapView.picking()) { MapView.cancelPick(); UI.toast('Marcação cancelada.'); return; }
+      if (UI.hideCountryCard()) return;
       App.home();
     });
 

@@ -96,6 +96,15 @@ descartar o que estava salvo no navegador.
   menor distância. Por padrão a 1ª e a última cidade ficam fixas (chegada e saída dos voos
   internacionais). Reordenar à mão desliga a otimização automática; o botão "Otimizar agora"
   mostra quanto a melhor ordem economiza.
+- **Passagens aéreas:** clique em um país no mapa (ou veja o painel da cidade) para abrir buscas
+  já preenchidas no Google Flights, Skyscanner e Kayak — da cidade anterior do roteiro até a
+  cidade daquele país, na data de chegada (e a volta para Campinas, na última cidade). Não usa
+  API nem chave: os preços aparecem no site de cada buscador.
+- **Hospedagem:** no painel da cidade, buscas no Airbnb e no Booking com as datas de entrada e
+  saída, e a página de hostels do Hostelworld. Em "Minha hospedagem", marque o local clicando no
+  mapa ou colando um link do Google Maps (ou "latitude, longitude"); as distâncias e o tempo a pé
+  dos pontos passam a ser medidos a partir dela. O número de pessoas fica em
+  `DATA.config.viajantes` (`js/data.js`).
 - **Orçamento:** itens gerais, câmbio, IOF e orçamento total.
 - **Esc** ou **Ver Europa inteira** fecha o painel e volta ao zoom inicial.
 

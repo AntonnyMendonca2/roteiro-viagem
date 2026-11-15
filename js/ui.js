@@ -97,13 +97,140 @@
   /* ======================================== distância do ponto ao centro da cidade */
   // Linha reta; o tempo a pé considera ~30% de desvio pelas ruas e 4,8 km/h.
   UI.dist = function (p) {
-    const c = A().city(p.cityId), km = A().distKm(c, p);
+    const c = A().city(p.cityId), h = A().hosp(p.cityId), km = A().distKm(h || c, p);
     const txt = '~' + (km < 1 ? Math.max(50, Math.round(km * 20) * 50) + ' m'
       : (km < 10 ? Math.round(km * 10) / 10 : Math.round(km)).toLocaleString('pt-BR') + ' km');
     const min = Math.round(km * 1.3 / 4.8 * 60);
     const ape = km <= 6 ? (min < 60 ? Math.max(1, min) + ' min' : Fmt.horas(min / 60)) + ' a pé' : '';
-    return { km, curto: txt, longo: txt + ' do centro de ' + c.nome + (ape ? ' · ~' + ape : '') };
+    return { km, curto: txt, longo: txt + (h ? ' da sua hospedagem' : ' do centro de ' + c.nome) + (ape ? ' · ~' + ape : '') };
   };
+
+  /* ====================================== links de busca (voos e hospedagem) */
+  // Não usam API nem chave: abrem a busca já preenchida no site de cada empresa.
+  const iataDe = id => (id === 'vcp' ? D.origem.iata : A().city(id).iata);
+  const ext = '" target="_blank" rel="noopener noreferrer">';
+
+  UI.linksVoo = function (from, to, date) {
+    const a = iataDe(from), b = iataDe(to), iso = A().iso(date), n = D.config.viajantes || 1;
+    return [
+      { nome: 'Google Flights', url: 'https://www.google.com/travel/flights?q=' +
+        encodeURIComponent('Flights from ' + a + ' to ' + b + ' on ' + iso + ' one way' + (n > 1 ? ' ' + n + ' adults' : '')) + '&hl=pt-BR&curr=BRL' },
+      { nome: 'Skyscanner', url: 'https://www.skyscanner.com.br/transporte/passagens-aereas/' + a.toLowerCase() + '/' + b.toLowerCase() + '/' +
+        iso.slice(2).replace(/-/g, '') + '/?adultsv2=' + n },
+      { nome: 'Kayak', url: 'https://www.kayak.com.br/flights/' + a + '-' + b + '/' + iso + (n > 1 ? '/' + n + 'adults' : '') + '?sort=bestflight_a' }
+    ];
+  };
+
+  UI.linksHosp = function (city, seg) {
+    const App = A(), n = D.config.viajantes || 1, q = encodeURIComponent(city.wiki);
+    const ci = seg ? App.iso(seg.start) : '', co = seg ? App.iso(seg.end) : '';
+    return [
+      { nome: 'Airbnb', url: 'https://www.airbnb.com.br/s/' + q + '/homes?' + (seg ? 'checkin=' + ci + '&checkout=' + co + '&' : '') + 'adults=' + n },
+      { nome: 'Booking', url: 'https://www.booking.com/searchresults.pt-br.html?ss=' + q + (seg ? '&checkin=' + ci + '&checkout=' + co : '') +
+        '&group_adults=' + n + '&no_rooms=1&selected_currency=BRL' },
+      { nome: 'Hostelworld', url: 'https://www.hostelworld.com/hostels/europe/' + city.hostelworld + '/' }
+    ];
+  };
+
+  const linkBtns = list => list.map(l => '<a class="btn" href="' + esc(l.url) + ext + esc(l.nome) + ' ↗</a>').join('');
+
+  // Linhas de voo para uma cidade (trecho de chegada e, se for a última, a volta).
+  UI.flightRows = function (cityId) {
+    return A().flightsFor(cityId).map(f => {
+      const trem = f.leg && f.leg.modo === 'trem';
+      return '<div class="fl-row"><div class="fl-t"><b>' + esc(nomeDe(f.from)) + ' → ' + esc(nomeDe(f.to)) + '</b>' +
+        '<small>' + Fmt.dow(f.date) + ', ' + Fmt.data(f.date) + (f.fora ? ' · cidade fora do roteiro' : '') +
+        (trem ? ' · no roteiro este trecho é de trem' : '') + '</small></div>' +
+        '<div class="links tight">' + linkBtns(UI.linksVoo(f.from, f.to, f.date)) + '</div></div>';
+    }).join('');
+  };
+
+  // Card de passagens ao clicar num país do mapa.
+  UI.showCountryCard = function (iso, nomePais, x, y) {
+    const App = A(), card = els.flightcard;
+    const doPais = D.cities.filter(c => c.paisIso === iso);
+    if (iso === D.infoArea.paisIso) return;
+    const noRoteiro = doPais.filter(c => App.state.cities[c.id].sel);
+    const lista = noRoteiro.length ? noRoteiro : doPais;
+    const titulo = doPais.length ? doPais[0].pais : nomePais;
+    card.innerHTML = '<div class="fc-head"><div><div class="kicker">Passagens aéreas</div><h3>' + esc(titulo) + '</h3></div>' +
+      '<button type="button" class="fc-x" data-act="fc-close" aria-label="Fechar">×</button></div>' +
+      (lista.length
+        ? lista.map(c => UI.flightRows(c.id)).join('') +
+          '<p class="muted">Os preços aparecem no site de cada buscador. Datas e cidades vêm do seu roteiro.</p>'
+        : '<p class="muted">Nenhuma cidade deste país está cadastrada no roteiro.</p>');
+    const w = Math.min(340, window.innerWidth - 24);
+    card.style.width = w + 'px';
+    card.classList.add('show');
+    const h = card.offsetHeight;
+    card.style.left = Math.max(12, Math.min(window.innerWidth - w - 12, x - w / 2)) + 'px';
+    card.style.top = Math.max(12, Math.min(window.innerHeight - h - 12, y - h - 14)) + 'px';
+  };
+
+  UI.hideCountryCard = function () {
+    if (!els.flightcard || !els.flightcard.classList.contains('show')) return false;
+    els.flightcard.classList.remove('show');
+    return true;
+  };
+
+  // Lê coordenadas de um link do Google Maps ou de um texto "lat, lon".
+  UI.parseLatLon = function (txt) {
+    let s = String(txt || '').trim();
+    try { s = decodeURIComponent(s); } catch (e) { /* ok */ }
+    const num = '(-?\\d{1,3}(?:\\.\\d+)?)';
+    const pats = [
+      new RegExp('!3d' + num + '!4d' + num),                                     // marcador do local
+      new RegExp('@' + num + ',' + num),                                          // centro do mapa
+      new RegExp('[?&](?:q|query|ll|destination|center)=' + num + ',\\s*' + num),
+      new RegExp('^' + num + '\\s*[,;\\s]\\s*' + num + '$')                         // "48.85, 2.35"
+    ];
+    for (const re of pats) {
+      const m = re.exec(s);
+      if (m) { const lat = +m[1], lon = +m[2]; if (Math.abs(lat) <= 90 && Math.abs(lon) <= 180) return { lat, lon }; }
+    }
+    return null;
+  };
+
+  function hospPaste(cityId) {
+    const App = A(), inp = $('#f-hosp-' + cityId);
+    const v = inp ? inp.value.trim() : '';
+    if (!v) { UI.toast('Cole um link do Google Maps ou as coordenadas (ex.: 48.8566, 2.3522).'); return; }
+    const ll = UI.parseLatLon(v);
+    if (!ll) {
+      UI.toast(/goo\.gl|maps\.app/.test(v)
+        ? 'Links curtos não trazem as coordenadas. No Google Maps, clique com o botão direito no local e copie as coordenadas, ou cole o link completo da barra do navegador.'
+        : 'Não encontrei coordenadas nesse texto. Use um link completo do Google Maps ou "latitude, longitude".', 8000);
+      return;
+    }
+    const km = App.distKm(App.city(cityId), ll);
+    App.setHosp(cityId, ll.lat, ll.lon);
+    UI.toast(km > 60 ? 'Hospedagem marcada, mas fica a ' + Math.round(km) + ' km de ' + App.city(cityId).nome + ' — confira.' : 'Hospedagem marcada.', km > 60 ? 6000 : 3200);
+  }
+
+  // Seção "Hospedagem" do painel da cidade.
+  function hospSection(c) {
+    const App = A(), cs = App.state.cities[c.id], seg = App.calc.segByCity[c.id], h = App.hosp(c.id);
+    let html = '<h4>Hospedagem</h4>' +
+      '<p class="ref">' + (seg ? 'Busca de ' + Fmt.data(seg.start) + ' a ' + Fmt.data(seg.end) + ' · ' : 'Sem datas (cidade fora do roteiro) · ') +
+      (D.config.viajantes || 1) + ((D.config.viajantes || 1) > 1 ? ' pessoas' : ' pessoa') + '</p>' +
+      '<div class="links tight">' + linkBtns(UI.linksHosp(c, seg)) + '</div>';
+    if (!cs.sel) return html;
+    html += '<div class="hosp-box"><div class="field"><label for="f-hn-' + c.id + '">Minha hospedagem <small>nome ou endereço</small></label>' +
+      '<input type="text" id="f-hn-' + c.id + '" data-fid="f-hn-' + c.id + '" data-path="cities.' + c.id + '.hosp.nome" placeholder="Ex.: Generator Paris" value="' + esc(cs.hosp.nome) + '"></div>';
+    if (h) {
+      html += '<p class="hosp-ok">⌂ Marcada no mapa — as distâncias dos pontos são medidas a partir dela.</p>' +
+        '<div class="links tight"><button type="button" class="btn" data-act="hosp-show" data-id="' + c.id + '">Ver no mapa</button>' +
+        '<button type="button" class="btn" data-act="hosp-pick" data-id="' + c.id + '">Mudar local</button>' +
+        '<a class="btn" href="https://www.google.com/maps/search/?api=1&amp;query=' + h.lat + ',' + h.lon + ext + 'Google Maps ↗</a>' +
+        '<button type="button" class="btn" data-act="hosp-clear" data-id="' + c.id + '">Remover</button></div>';
+    } else {
+      html += '<button type="button" class="btn primary wide" data-act="hosp-pick" data-id="' + c.id + '">⌂ Marcar no mapa</button>' +
+        '<div class="field"><label for="f-hosp-' + c.id + '">ou cole um link do Google Maps / coordenadas</label>' +
+        '<div class="money-in"><input type="text" id="f-hosp-' + c.id + '" data-fid="f-hosp-' + c.id + '" placeholder="https://www.google.com/maps/… ou 48.85, 2.35">' +
+        '<button type="button" class="btn" data-act="hosp-paste" data-id="' + c.id + '">Usar</button></div></div>';
+    }
+    return html + '</div>';
+  }
 
   /* ============================================================ textos de trecho */
   const nomeDe = id => (id === 'vcp' ? D.origem.nomeCurto : A().city(id).nome);
@@ -147,7 +274,7 @@
       sidebar: $('#sidebar'), views: $('#views'), detail: $('#detail'), compare: $('#compare'),
       timeline: $('#timeline'), legend: $('#legend'), tags: $('#tags'), toast: $('#toast'),
       sumTotal: $('#sum-total'), sumPct: $('#sum-pct'), sumBudget: $('#sum-budget'),
-      sumBar: $('#sum-bar'), sumDetails: $('#sum-details'), file: $('#file-import')
+      sumBar: $('#sum-bar'), sumDetails: $('#sum-details'), file: $('#file-import'), flightcard: $('#flightcard')
     };
     renderLegend();
     bind();
@@ -193,6 +320,11 @@
         case 'import': els.file.value = ''; els.file.click(); break;
         case 'reset': App.reset(); break;
         case 'optimize': App.optimizeNow(); break;
+        case 'fc-close': UI.hideCountryCard(); break;
+        case 'hosp-pick': App.pickHosp(id); break;
+        case 'hosp-paste': hospPaste(id); break;
+        case 'hosp-clear': App.state.cities[id].hosp.lat = null; App.state.cities[id].hosp.lon = null; App.refresh(); UI.toast('Hospedagem removida do mapa.'); break;
+        case 'hosp-show': { openDrawer(false); window.MapView.showHosp(id); break; }
         case 'legend': els.legend.classList.toggle('open'); break;
         case 'day': if (id) App.openCity(id); break;
       }
@@ -274,11 +406,11 @@
   }
 
   /* ==================================================================== toasts */
-  UI.toast = function (msg) {
+  UI.toast = function (msg, ms) {
     els.toast.textContent = msg;
     els.toast.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => els.toast.classList.remove('show'), 3200);
+    toastTimer = setTimeout(() => els.toast.classList.remove('show'), ms || 3200);
   };
 
   /* ===================================================== contagem animada (total) */
@@ -539,6 +671,7 @@
     if (cs.sel) {
       html += '<h4>Gastos na cidade</h4>' + D.categorias.map(k => money(k.nome, 'cities.' + c.id + '.custos.' + k.id)).join('');
     }
+    html += hospSection(c) + '<h4>Passagens aéreas</h4>' + UI.flightRows(c.id);
 
     html += '<h4>Pontos de interesse <small>' + ativos + ' de ' + todos.length + ' no roteiro' + (tag ? ' · filtro: ' + esc(tag) : '') + '</small></h4>';
     if (temBV) html += '<div class="chips wrap"><button type="button" class="chip" data-act="fit-core" data-id="' + c.id + '">Ver o centro</button>' +
