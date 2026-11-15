@@ -28,8 +28,8 @@
   const REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const POI_ZOOM = 4;          // a partir deste zoom os pontos de interesse aparecem
   const PX_KM_MAX = 90;        // zoom máximo ao enquadrar uma cidade (px por km)
-  const PX_KM_STREET = 380;
-  const TH_R = 17;             // raio (px) do círculo com foto dos pontos da cidade aberta    // zoom ao abrir um ponto de interesse (px por km ≈ nível de ruas)
+  const PX_KM_STREET = 380;    // zoom ao abrir um ponto de interesse (px por km ≈ nível de ruas)
+  const TH_R = 21;             // raio (px) do círculo com foto dos pontos da cidade aberta
 
   let svg, node, root, hatch, tilesG, scaleEl, attribEl;
   let tilesCur = [], tilesZ = -1, lingering = [], lingerTimer = null;

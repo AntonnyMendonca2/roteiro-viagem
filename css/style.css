@@ -159,7 +159,8 @@ small { font-weight: 400; color: var(--muted); }
 .lvl-city .poi.big .dot { opacity: 0; }
 .th-bg { fill: #2a2a2a; }
 .th-ini { font-size: 10px; font-weight: 700; fill: #8a8a8a; pointer-events: none; }
-.poi image { filter: grayscale(1) brightness(.8); transition: filter .5s ease; }
+/* não selecionados: cor parcial (reconhecível, mas discreta); selecionados: cor plena + anel âmbar */
+.poi image { filter: saturate(.5) brightness(.97); transition: filter .5s ease; }
 .poi.sel image, .poi:hover image, .poi.focus image { filter: none; }
 .th-ring { fill: none; stroke: #b5b5b5; stroke-width: 2px; }
 .poi.sel .th-ring { stroke: var(--accent); stroke-width: 3px; filter: drop-shadow(0 0 5px var(--accent)); }
