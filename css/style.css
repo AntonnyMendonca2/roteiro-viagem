@@ -329,6 +329,51 @@ small { font-weight: 400; color: var(--muted); }
 #btn-home { opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .25s, transform .25s, visibility .25s; }
 .zoomed #btn-home { opacity: 1; visibility: visible; transform: none; }
 
+/* cenários A/B/C: menu da barra superior e painel de comparação */
+.cen-wrap { position: relative; }
+#btn-cen { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#btn-cen small { color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; margin-right: 3px; }
+#cenmenu {
+  position: absolute; top: calc(100% + 6px); right: 0; width: min(310px, calc(100vw - 20px)); z-index: 34;
+  background: var(--panel); border: 1px solid #343434; border-radius: var(--radius); box-shadow: var(--shadow); padding: 6px;
+}
+#cenmenu[hidden] { display: none; }
+#topbar.menu-open { z-index: 35; }   /* menu aberto fica por cima do painel de comparação */
+#cenmenu ul { list-style: none; margin: 0; padding: 0; max-height: 46vh; overflow-y: auto; }
+#cenmenu li { display: flex; align-items: center; gap: 2px; border-radius: 9px; }
+#cenmenu li.on { background: var(--panel-2); }
+.cm-go { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; border: 0; background: none; color: var(--text); text-align: left; padding: 7px 8px; border-radius: 9px; }
+.cm-go:hover { background: var(--panel-3); }
+.cm-go b { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 11.5px; }
+li.on .cm-go b { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.cm-go span { min-width: 0; font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cm-go small { display: block; font-size: 10.5px; font-weight: 400; color: var(--muted); }
+.cm-ic { flex: none; border: 0; background: none; color: #9a9a9a; width: 28px; height: 28px; border-radius: 7px; font-size: 14px; }
+.cm-ic:hover { color: #fff; background: var(--panel-3); }
+.cm-acts { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 4px 4px; border-top: 1px solid var(--line); margin-top: 6px; }
+
+#cenbox {
+  position: fixed; z-index: 31; top: 56px; left: 14px; width: min(560px, calc(100vw - var(--sidebar-w) - 28px));
+  max-height: calc(100vh - var(--timeline-h, 90px) - 80px); overflow-y: auto;
+  background: var(--panel); border: 1px solid #343434; border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 12px 14px; display: none;
+}
+#cenbox.show { display: block; animation: rise .22s ease; }
+.cb-pick { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+.cb-pick .chip[disabled] { opacity: 1; cursor: default; }
+.cb-scroll { overflow-x: auto; }
+.cb-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.cb-table th, .cb-table td { text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+.cb-table thead th { font-size: 12px; font-weight: 600; white-space: normal; }
+.cb-table thead th i { font-style: normal; font-size: 10px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 5px; margin-left: 3px; }
+.cb-table tbody th { color: var(--muted); font-weight: 500; }
+.cb-table td small { display: block; color: var(--muted); font-size: 11px; }
+.cb-table tbody tr:first-child td { font-weight: 700; font-size: 13.5px; }
+.cb-cities { display: grid; gap: 10px; margin-top: 12px; font-size: 12px; }
+.cb-cities ol { margin: 4px 0 0; padding-left: 18px; color: #c4c4c4; }
+.cb-cities li.only { color: var(--accent); font-weight: 600; }
+.cb-cities li.vazio { list-style: none; margin-left: -18px; color: var(--muted); }
+
 /* chips do dia a dia sobre o mapa */
 #daychips { position: fixed; top: 52px; left: 14px; right: calc(var(--sidebar-w) + 14px); z-index: 5; align-items: center; pointer-events: none; }
 #daychips:empty { display: none; }
@@ -857,6 +902,10 @@ input[type=text]:focus { outline: none; border-color: var(--accent); }
 
   #topbar { top: 8px; left: 10px; right: 10px; flex-wrap: wrap; gap: 6px 10px; }
   #daychips { top: 112px; left: 10px; right: 10px; }
+  #cenbox { top: 100px; left: 10px; right: 10px; width: auto; max-height: calc(100vh - 100px - var(--peek) - 12px); }
+  #btn-cen { max-width: 120px; }
+  #btn-cen small { display: none; }
+  .top-btns .btn.pill { padding: 5px 9px; }
   .brand { flex-direction: row; align-items: baseline; gap: 6px; }
   .chips#tags { order: 3; flex-basis: 100%; }
   #loading { left: 50%; top: 40%; }

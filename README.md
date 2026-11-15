@@ -67,6 +67,7 @@ js/ape.js       trajetos reais a pé (matriz de tempos da cidade e caminho desen
 js/descobrir.js "Descobrir por perto" e pontos de interesse criados pelo usuário
 js/diaadia.js   roteiro dia a dia automático de cada cidade
 js/assistente.js assistente "Tenho X dias e R$ Y: o que cabe?" (otimizador em Web Worker)
+js/cenarios.js   cenários A/B/C: versões do roteiro e comparação lado a lado
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -187,6 +188,16 @@ descartar o que estava salvo no navegador.
 
 Os preços e tempos são aproximados e servem de referência — confira nos sites oficiais antes de
 comprar.
+
+### Cenários A/B/C
+
+O botão **Cenário** (barra superior) guarda várias versões do roteiro — por exemplo "Com Roma" e "Só Leste Europeu":
+
+- **Duplicar o atual** cria uma cópia e já entra nela; **Criar vazio** começa do zero; ✎ renomeia e × exclui (com confirmação).
+- Cada cenário tem a sua data de saída, cidades (ordem, noites, gastos, hospedagem), pontos, trechos (modo e valor real) e opções da rota inteligente. **Itens gerais, orçamento total e câmbio são os mesmos em todos**, para a comparação ser justa.
+- **Comparar…** abre o painel lado a lado (o cenário ativo + até 2): total, dias, noites, horas de deslocamento, cidades, pontos, trechos por meio de transporte e interesse, com a diferença para o ativo. As cidades que só existem em um cenário aparecem em destaque. Com **Comparar no mapa**, as rotas dos outros cenários aparecem em cinza tracejado.
+- No **Assistente**, cada alternativa tem o botão **Salvar como cenário**.
+- Roteiros salvos antes desta versão viram o "Cenário A" sozinhos. **Exportar/Importar** levam todos os cenários.
 
 ## APIs externas
 

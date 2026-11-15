@@ -81,7 +81,9 @@
       assist: { dias: '', orcamento: '', nMin: 1, nMax: 5, pontas: true, obrig: [], proib: [] },   // assistente "o que cabe?"
       customPois: [],                           // pontos criados pelo usuário (mesmo formato de DATA.pois)
       ocultos: {},                              // sugestões ocultadas em "Descobrir por perto": { cidade: [títulos] }
-      otim: { auto: true, criterio: 'tempo', fixarPontas: true }   // rota inteligente
+      otim: { auto: true, criterio: 'tempo', fixarPontas: true },  // rota inteligente
+      cenarios: [], cenarioAtivo: '',           // cenários A/B/C (cenarios.js); o ativo fica "vivo" nos campos acima
+      cenComparar: [], cenNoMapa: false         // cenários escolhidos para comparar · comparar no mapa
     };
     D.cities.forEach(c => {
       const custos = {};
@@ -109,6 +111,22 @@
       else if (v !== undefined && (b === undefined || b === null || isObj(b) === isObj(v))) base[k] = isObj(v) ? clone(v) : v;
     });
     return base;
+  }
+
+  // O que em "obj" é diferente de "base" (só as folhas que mudaram; undefined = nada mudou).
+  // merge(base, diff(base, obj)) reconstrói obj. Usado nos cenários e no link de compartilhamento.
+  function diff(base, obj) {
+    if (isObj(base) && isObj(obj)) {
+      const out = {};
+      let algum = false;
+      Object.keys(obj).forEach(k => {
+        const d = diff(base[k], obj[k]);
+        if (d !== undefined) { out[k] = d; algum = true; }
+      });
+      return algum ? out : undefined;
+    }
+    if (obj === undefined) return undefined;
+    return JSON.stringify(base) === JSON.stringify(obj) ? undefined : clone(obj);
   }
 
   function load() {
@@ -154,6 +172,7 @@
     ['obrig', 'proib'].forEach(k => { s.assist[k] = (Array.isArray(s.assist[k]) ? s.assist[k] : []).filter(id => cityById[id]); });
     s.assist.pontas = !!s.assist.pontas;
     s.spread = Math.max(0, Math.min(30, num(s.spread)));
+    window.Cenarios.garantir(s);   // dados antigos: o roteiro atual vira o "Cenário A"
     return s;
   }
 
@@ -611,6 +630,13 @@
     try { return compute({ leve: true }).total; } finally { App.state.cambio = real; }
   };
 
+  // Cálculo de outro estado (ex.: um cenário guardado), sem mexer no estado atual.
+  App.calcDe = function (estado) {
+    const real = App.state;
+    App.state = estado;
+    try { return compute({ leve: true }); } finally { App.state = real; }
+  };
+
   /* ------------------------------------------------------ consultas derivadas */
   // Ponto "ativo" = selecionado E com a cidade no roteiro.
   App.poiActive = function (id) {
@@ -712,12 +738,14 @@
 
   App.refresh = function (modo) {
     const crit = App.state.otim.criterio, ganho = computeAuto();
+    window.Cenarios.tocar();      // marca a data de alteração do cenário ativo
     save();
     if (ganho) {
       modo = undefined;   // a ordem mudou: redesenha tudo
       UI.toast('Roteiro reordenado para a melhor rota: ' + UI.otimTxt(ganho, crit) + ' a menos.');
     }
     if (modo === 'light') UI.renderLight(); else UI.renderAll();
+    window.Cenarios.render();
     MapView.update();
     window.Clima.carregar();      // clima das cidades do roteiro (só busca o que falta)
     window.Trilhos.carregar();    // traçado real e paisagens dos trechos de trem (só o que falta)
@@ -900,9 +928,20 @@
   };
 
   /* ------------------------------------------- exportar / importar / restaurar */
+  // O arquivo exportado leva o estado inteiro — inclusive todos os cenários.
+  App.pacote = () => ({ app: 'viagem-europa', versao: 1, exportadoEm: new Date().toISOString(), estado: App.state });
+
+  // Lê um arquivo exportado e devolve o estado pronto para uso (ou null se não for um roteiro).
+  App.lerPacote = function (text) {
+    let obj;
+    try { obj = JSON.parse(text); } catch (e) { obj = null; }
+    const src = obj && isObj(obj.estado) ? obj.estado : obj;
+    if (!isObj(src) || !isObj(src.cities) || !isObj(src.pois)) return null;
+    return sanitize(merge(defaults(), migrar(src)));
+  };
+
   App.exportJSON = function () {
-    const data = { app: 'viagem-europa', versao: 1, exportadoEm: new Date().toISOString(), estado: App.state };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(App.pacote(), null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'viagem-europa-' + App.iso(new Date()) + '.json';
@@ -914,14 +953,12 @@
   };
 
   App.importJSON = function (text) {
-    let obj;
-    try { obj = JSON.parse(text); } catch (e) { obj = null; }
-    const src = obj && isObj(obj.estado) ? obj.estado : obj;
-    if (!isObj(src) || !isObj(src.cities) || !isObj(src.pois)) {
+    const novo = App.lerPacote(text);
+    if (!novo) {
       UI.toast('Arquivo inválido: não parece um roteiro exportado por este app.');
       return false;
     }
-    App.state = sanitize(merge(defaults(), src));
+    App.state = novo;
     App.focus = null;
     UI.hideDetail();
     MapView.rebuildPois();
@@ -932,9 +969,9 @@
   };
 
   App.reset = function () {
-    if (!window.confirm('Restaurar o roteiro padrão? Todas as suas escolhas e valores serão apagados.')) return;
+    if (!window.confirm('Restaurar o roteiro padrão? Todas as suas escolhas, valores e cenários serão apagados.')) return;
     try { window.localStorage.removeItem(LS_KEY); } catch (e) { /* ok */ }
-    App.state = defaults();
+    App.state = sanitize(defaults());
     App.focus = null;
     UI.hideDetail();
     MapView.rebuildPois();
@@ -955,7 +992,9 @@
     window.Descobrir.bind();
     window.DiaADia.bind();
     window.Assistente.bind();
+    window.Cenarios.bind();
     UI.renderAll();
+    window.Cenarios.render();
     MapView.init();
     MapView.update();
     MapView.fitRoute(true);       // abre enquadrando o roteiro atual ("Ver Europa inteira" mostra tudo)
@@ -986,6 +1025,6 @@
   }
 
   // Ganchos para a página de testes (tests/index.html), que carrega os scripts sem iniciar o app.
-  App._t = { defaults, merge, sanitize, compute, heldKarp, heuristica, trainPath, caminho, estimar, pairCost, routeCost, legDef };
+  App._t = { defaults, merge, diff, sanitize, compute, heldKarp, heuristica, trainPath, caminho, estimar, pairCost, routeCost, legDef };
   if (!window.VIAGEM_TESTE) init();
 })();

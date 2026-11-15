@@ -511,6 +511,83 @@
     ok(perto1 > longe1, 'uma noite depois de um trecho longo rende menos');
   });
 
+  /* ------------------------------------------------------------ cenários */
+  grupo('Cenários A/B/C');
+  const Cen = window.Cenarios;
+
+  teste('diff + merge reconstroem o estado (base do retrato dos cenários)', () => {
+    const S = novoEstado();
+    S.cities.roma.sel = true; S.cities.roma.noites = 4; S.dataSaida = '2027-04-10';
+    S.legs['paris~zurique'] = { modo: 'aviao' };
+    const d = T.diff(T.defaults(), S);
+    ok(d.cities.roma.noites === 4 && Object.keys(d.cities).length === 1, 'só o que mudou entra no diff');
+    const volta = T.sanitize(T.merge(T.defaults(), d));
+    igual(Cen.retrato(volta), Cen.retrato(S));
+    ok(T.diff({ a: 1, b: { c: [1, 2] } }, { a: 1, b: { c: [1, 2] } }) === undefined, 'iguais → undefined');
+  });
+
+  teste('Duplicar → alterar → comparar: cada total bate com o cálculo do próprio cenário', () => {
+    const S = novoEstado();
+    App.calc = T.compute({ leve: true });
+    const totalA = App.calc.total, rotaA = App.calc.route.slice(), idA = S.cenarioAtivo;
+    const b = Cen.criar('Com Roma', Cen.retrato(S));
+    ok(Cen.ativar(S, b.id), 'trocou para a cópia');
+    App.calc = T.compute({ leve: true });
+    perto(App.calc.total, totalA, 0.01, 'a cópia nasce idêntica');
+    // altera só o cenário B
+    S.cities.roma.sel = true; S.cities.roma.ordem = 50; S.cities.roma.noites = 3;
+    S.cities.roma.custos.hospedagem = { v: 900, cur: 'EUR' };
+    App.calc = T.compute({ leve: true });
+    const totalB = App.calc.total;
+    ok(totalB > totalA + 100, 'B ficou mais caro');
+    S.cenComparar = [idA];
+    Cen.tocar();
+    const rs = Cen.comparados();
+    igual(rs.map(r => r.letra), ['B', 'A']);
+    perto(rs[0].total, totalB, 0.01, 'total de B');
+    perto(rs[1].total, totalA, 0.01, 'total de A (calculado à parte)');
+    igual(rs[1].rota, rotaA);
+    ok(rs[0].rota.indexOf('roma') >= 0 && rs[1].rota.indexOf('roma') < 0, 'Roma só existe em B');
+    ok(rs[0].noites === rs[1].noites + 3 && rs[0].cidades === rs[1].cidades + 1, 'noites e cidades');
+    // voltar para A devolve o roteiro original, e B continua guardado
+    Cen.ativar(S, idA);
+    App.calc = T.compute({ leve: true });
+    perto(App.calc.total, totalA, 0.01, 'A intacto');
+    ok(!S.cities.roma.sel, 'Roma não vazou para A');
+    Cen.tocar();
+    perto(Cen.resumo(b.id).total, totalB, 0.01, 'B guardado');
+  });
+
+  teste('Dados antigos (sem cenários): o roteiro atual vira "Cenário A"', () => {
+    const antigo = JSON.parse(JSON.stringify(T.defaults()));
+    delete antigo.cenarios; delete antigo.cenarioAtivo; delete antigo.cenComparar; delete antigo.cenNoMapa;
+    antigo.cities.roma.sel = true;
+    const S = App.lerPacote(JSON.stringify({ estado: antigo }));
+    ok(S, 'leu o arquivo antigo');
+    igual(S.cenarios.map(c => c.nome), ['Cenário A']);
+    ok(S.cenarioAtivo === S.cenarios[0].id && S.cenarios[0].dados === null, 'ativo e "vivo"');
+    ok(S.cities.roma.sel, 'o roteiro antigo foi mantido');
+  });
+
+  teste('Exportar e importar levam todos os cenários', () => {
+    const S = novoEstado();
+    const idA = S.cenarioAtivo;
+    const b = Cen.criar('Só Leste', Cen.retrato(S));
+    Cen.ativar(S, b.id);
+    S.cities.cracovia.noites = 6;
+    Cen.criar('Vazio', {});
+    const txt = JSON.stringify(App.pacote());
+    novoEstado();
+    const N = App.lerPacote(txt);
+    igual(N.cenarios.map(c => c.nome), ['Cenário A', 'Só Leste', 'Vazio']);
+    ok(N.cenarioAtivo === b.id && N.cities.cracovia.noites === 6, 'cenário ativo e seus dados');
+    App.state = N;
+    Cen.ativar(N, idA);
+    ok(N.cities.cracovia.noites !== 6, 'o cenário A veio com os dados dele');
+    ok(N.cenarios.find(c => c.id === b.id).dados.cities.cracovia.noites === 6, 'B guardado com a alteração');
+    ok(App.lerPacote('{"x":1}') === null && App.lerPacote('não é json') === null, 'arquivo inválido → null');
+  });
+
   /* ------------------------------------------------------------ utilitários */
   grupo('Utilitários');
 

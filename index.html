@@ -32,6 +32,10 @@
     </div>
     <div id="tags" class="chips" role="group" aria-label="Filtrar pontos por tag"></div>
     <div class="top-btns">
+      <div class="cen-wrap">
+        <button id="btn-cen" class="btn pill" type="button" data-act="cen-menu" aria-haspopup="true" aria-expanded="false" title="Cenários: versões diferentes do roteiro">Cenário</button>
+        <div id="cenmenu" hidden></div>
+      </div>
       <button id="btn-rota" class="btn pill" type="button" data-act="fit-route" title="Enquadrar as cidades do roteiro">Ver meu roteiro</button>
       <button id="btn-home" class="btn pill" type="button" title="Mostrar todos os destinos (Esc)">Ver Europa inteira</button>
     </div>
@@ -87,6 +91,7 @@
   <div id="hovercard" aria-hidden="true"></div>
   <div id="tip" aria-hidden="true"></div>
   <div id="flightcard" role="dialog" aria-label="Passagens aéreas"></div>
+  <div id="cenbox" role="dialog" aria-label="Comparação de cenários"></div>
   <div id="toast" role="status"></div>
   <input type="file" id="file-import" accept="application/json,.json" hidden>
 
@@ -110,6 +115,7 @@
   <script src="js/descobrir.js"></script>
   <script src="js/diaadia.js"></script>
   <script src="js/assistente.js"></script>
+  <script src="js/cenarios.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
