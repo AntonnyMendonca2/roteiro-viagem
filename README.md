@@ -66,6 +66,7 @@ js/trilhos.js   traçado real dos trens, horários reais e paisagens no caminho
 js/ape.js       trajetos reais a pé (matriz de tempos da cidade e caminho desenhado)
 js/descobrir.js "Descobrir por perto" e pontos de interesse criados pelo usuário
 js/diaadia.js   roteiro dia a dia automático de cada cidade
+js/assistente.js assistente "Tenho X dias e R$ Y: o que cabe?" (otimizador em Web Worker)
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -172,6 +173,16 @@ descartar o que estava salvo no navegador.
   chips escolhem o dia: o trajeto dele aparece em destaque com os pontos numerados e os outros
   dias em cinza tracejado. Clicar num dia da linha do tempo abre o plano daquele dia, e **Copiar
   como texto** leva a agenda para a área de transferência.
+- **Assistente "o que cabe?":** na aba **Assistente**, informe os dias e o orçamento, dê de 1 a 5
+  estrelas às cidades, marque as obrigatórias ("obrig.") e as que não quer ("não"), ajuste as
+  noites mínimas/máximas e clique em **Montar 3 roteiros**. O app escolhe cidades, ordem, noites
+  e meio de transporte de cada trecho e mostra três alternativas — mais interesse, mais barata e
+  equilibrada — com custo estimado, dias, horas de deslocamento e a diferença para o roteiro
+  atual. **Ver no mapa** mostra a prévia em cinza tracejado; **Aplicar este roteiro** substitui o
+  atual (com confirmação e **Desfazer**). O custo usa as diárias de cada cidade (hospedagem e
+  gastos por dia), editáveis no painel da cidade em "Estimativas por dia para o assistente".
+  A busca é uma metaheurística (simulated annealing) com tempo limitado, rodando em um Web
+  Worker criado por Blob — funciona também em `file://`.
 - **Esc** ou **Ver Europa inteira** fecha o painel e volta ao zoom inicial.
 
 Os preços e tempos são aproximados e servem de referência — confira nos sites oficiais antes de

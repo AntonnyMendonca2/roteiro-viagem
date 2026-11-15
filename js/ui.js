@@ -438,8 +438,16 @@
   }
 
   /* ==================================================================== toasts */
-  UI.toast = function (msg, ms) {
+  // acao (opcional): { rotulo, fn } vira um botão dentro do aviso (ex.: "Desfazer").
+  UI.toast = function (msg, ms, acao) {
     els.toast.textContent = msg;
+    els.toast.classList.toggle('has-act', !!acao);
+    if (acao) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = acao.rotulo;
+      b.onclick = () => { els.toast.classList.remove('show'); acao.fn(); };
+      els.toast.appendChild(b);
+    }
     els.toast.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => els.toast.classList.remove('show'), ms || 3200);
@@ -557,8 +565,9 @@
       b.classList.toggle('on', on);
       b.setAttribute('aria-selected', String(on));
     });
-    els.views.innerHTML = tab === 'roteiro' ? viewRoteiro() : tab === 'orcamento' ? viewOrcamento() : viewDados();
+    els.views.innerHTML = tab === 'roteiro' ? viewRoteiro() : tab === 'orcamento' ? viewOrcamento() : tab === 'assistente' ? window.Assistente.html() : viewDados();
     if (tab === 'roteiro' && UI.buscaCidade) filtrarCidades();
+    if (tab === 'assistente' && window.Assistente.busca) window.Assistente.filtrar();
   }
 
   function legCard(leg) {
@@ -716,6 +725,7 @@
 
     if (cs.sel) {
       html += '<h4>Gastos na cidade</h4>' + D.categorias.map(k => money(k.nome, 'cities.' + c.id + '.custos.' + k.id)).join('');
+      html += window.Assistente.cityHtml(c);
     }
     html += hospSection(c) + '<h4>Passagens aéreas</h4>' + UI.flightRows(c.id);
 
@@ -729,7 +739,7 @@
       return '<li class="poirow' + (on ? ' on' : '') + '">' +
         '<button type="button" class="chk" data-act="toggle-poi" data-id="' + p.id + '" data-fid="tp-' + p.id + '" aria-pressed="' + on + '" aria-label="' +
         (on ? 'Remover do roteiro' : 'Incluir no roteiro') + '">✓</button>' +
-        '<button type="button" class="pr-main" data-act="open-poi" data-id="' + p.id + '"><span class="pr-n">' + esc(p.nome) + (p.custom ? ' <i class="mine" title="Adicionado por você">meu</i>' : '') + (w ? ' <i class="wdot" title="' + esc(w.texto) + '">!</i>' : '') + '</span>' +
+        '<button type="button" class="pr-main" data-act="open-poi" data-id="' + p.id + '"><span class="pr-n">' + esc(p.nome) + (p.custom ? ' <i class="meu-tag" title="Adicionado por você">meu</i>' : '') + (w ? ' <i class="wdot" title="' + esc(w.texto) + '">!</i>' : '') + '</span>' +
         '<span class="pr-m">' + esc(p.preco.label) + ' · ' + esc(UI.dist(p).curto) + (p.tags.length ? ' · ' + esc(p.tags.join(', ')) : '') + '</span></button></li>';
     }).join('') : '<li class="empty">Nenhum ponto com a tag "' + esc(tag) + '" nesta cidade.</li>') + '</ul>';
     html += window.Descobrir.cityHtml(c);

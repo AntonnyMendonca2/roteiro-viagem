@@ -77,6 +77,8 @@
       cambioInfo: { data: '', fonte: '', ant: null, antData: '' },   // data da cotação e cotações anteriores
       cities: {}, pois: {}, legs: {}, gerais: {},
       tag: null,
+      interesse: {},                            // nota de interesse por cidade (1 a 5 estrelas; padrão 3)
+      assist: { dias: '', orcamento: '', nMin: 1, nMax: 5, pontas: true, obrig: [], proib: [] },   // assistente "o que cabe?"
       customPois: [],                           // pontos criados pelo usuário (mesmo formato de DATA.pois)
       ocultos: {},                              // sugestões ocultadas em "Descobrir por perto": { cidade: [títulos] }
       otim: { auto: true, criterio: 'tempo', fixarPontas: true }   // rota inteligente
@@ -85,7 +87,8 @@
       const custos = {};
       D.categorias.forEach(k => { custos[k.id] = { v: '', cur: 'BRL' }; });
       s.cities[c.id] = { sel: !!c.selecionada, noites: c.noites || 1, ordem: c.ordem || 99, custos,
-        hosp: { nome: '', lat: null, lon: null } };   // minha hospedagem (marcada no mapa)
+        hosp: { nome: '', lat: null, lon: null },     // minha hospedagem (marcada no mapa)
+        diaria: { hosp: '', gastos: '' } };           // estimativas por dia para o assistente ('' = padrão do data.js)
     });
     D.pois.forEach(p => {
       const ps = { sel: !!p.selecionado, valor: { v: p.preco.v, cur: p.preco.cur }, dia: '' };
@@ -147,6 +150,9 @@
     });
     Object.keys(s.pois).forEach(id => { if (/^u-/.test(id) && !s.customPois.some(p => p.id === id)) delete s.pois[id]; });
     if (!isObj(s.ocultos)) s.ocultos = {};
+    if (!isObj(s.interesse)) s.interesse = {};
+    ['obrig', 'proib'].forEach(k => { s.assist[k] = (Array.isArray(s.assist[k]) ? s.assist[k] : []).filter(id => cityById[id]); });
+    s.assist.pontas = !!s.assist.pontas;
     s.spread = Math.max(0, Math.min(30, num(s.spread)));
     return s;
   }
@@ -195,30 +201,38 @@
 
   // Caminho mais rápido usando só os trechos da tabela e os modos permitidos (Dijkstra).
   // Ex.: Londres → Zurique de trem = Eurostar até Paris + TGV Lyria.
-  const memoCaminho = {};
-  function caminho(from, to, modos) {
-    const chave = from + '>' + to + '|' + modos.join();
-    if (chave in memoCaminho) return memoCaminho[chave];
-    // melhor modo permitido de um trecho
-    const melhor = l => {
-      let m = null;
-      modos.forEach(k => { if (l[k] && (!m || midH(l[k]) < midH(l[m]))) m = k; });
-      return m;
-    };
+  const memoArvore = {}, memoCaminho = {};
+  // melhor modo permitido de um trecho
+  const melhorModo = (l, modos) => {
+    let m = null;
+    modos.forEach(k => { if (l[k] && (!m || midH(l[k]) < midH(l[m]))) m = k; });
+    return m;
+  };
+  // Árvore de caminhos mínimos a partir de uma cidade (uma vez por origem e conjunto de modos).
+  function arvore(from, modos) {
+    const chave = from + '|' + modos.join();
+    if (memoArvore[chave]) return memoArvore[chave];
     const dist = {}, prev = {}, edge = {}, done = {};
     dist[from] = 0;
     for (;;) {
       let u = null;
       Object.keys(dist).forEach(id => { if (!done[id] && (u === null || dist[id] < dist[u])) u = id; });
-      if (u === null || u === to) break;
+      if (u === null) break;
       done[u] = true;
       (vizinhos[u] || []).forEach(l => {
-        const m = melhor(l);
+        const m = melhorModo(l, modos);
         if (!m) return;
         const v = l.a === u ? l.b : l.a, w = dist[u] + midH(l[m]) + BALDEACAO_H;
         if (dist[v] === undefined || w < dist[v]) { dist[v] = w; prev[v] = u; edge[v] = { l, m }; }
       });
     }
+    return (memoArvore[chave] = { dist, prev, edge });
+  }
+
+  function caminho(from, to, modos) {
+    const chave = from + '>' + to + '|' + modos.join();
+    if (chave in memoCaminho) return memoCaminho[chave];
+    const { dist, prev, edge } = arvore(from, modos);
     let res = null;
     if (dist[to] !== undefined) {
       const ids = [to], es = [];
@@ -940,6 +954,7 @@
     window.Ape.bind();
     window.Descobrir.bind();
     window.DiaADia.bind();
+    window.Assistente.bind();
     UI.renderAll();
     MapView.init();
     MapView.update();

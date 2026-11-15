@@ -60,7 +60,7 @@
     svg.select('defs').append('clipPath').attr('id', 'cena-clip').append('circle').attr('r', CENA_R);
     scaleEl = document.getElementById('scale');
     attribEl = document.getElementById('attrib');
-    ['countries', 'hatch', 'routes', 'trips', 'walk', 'cenas', 'cities', 'sug', 'pois', 'nums', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
+    ['countries', 'hatch', 'routes', 'preview', 'trips', 'walk', 'cenas', 'cities', 'sug', 'pois', 'nums', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
       L[n] = root.append('g').attr('class', 'l-' + n);
     });
     card = document.getElementById('hovercard');
@@ -716,6 +716,29 @@
       return g;
     });
     place(sg);
+
+    // prévias de outros roteiros (assistente, comparação de cenários): cinza tracejado sobre a rota atual
+    const prevs = [];
+    const pa = window.Assistente.rotaPrevia();
+    if (pa && pa.length) prevs.push({ ids: pa, rot: '' });
+    if (window.Cenarios) window.Cenarios.paraMapa().forEach(p => prevs.push(p));
+    const segsPrev = [];
+    prevs.forEach((p, n) => {
+      const seq = ['vcp'].concat(p.ids, ['vcp']);
+      for (let i = 0; i < seq.length - 1; i++) {
+        const a = cityPt(seq[i]), b = cityPt(seq[i + 1]);
+        if (a && b) segsPrev.push({ d: arc(a, b, n % 2 ? 'trem' : 'balsa').d, rot: i === 1 ? p.rot : '', mid: arc(a, b, n % 2 ? 'trem' : 'balsa').mid });
+      }
+    });
+    L.preview.selectAll('path').data(segsPrev).join('path').attr('class', 'route-prev').attr('d', d => d.d);
+    const rl = L.preview.selectAll('g.prevlbl').data(segsPrev.filter(s => s.rot).map(s => Object.assign({ x: s.mid.x, y: s.mid.y }, s))).join(enter => {
+      const g = enter.append('g').attr('class', 'mk prevlbl');
+      g.append('circle').attr('r', 9);
+      g.append('text').attr('y', 4).attr('text-anchor', 'middle');
+      return g;
+    });
+    rl.select('text').text(d => d.rot);
+    place(rl);
 
     // dia a dia: trajeto do dia escolhido em destaque (pontos numerados); outros dias em cinza tracejado
     const dp = window.DiaADia.paraMapa();

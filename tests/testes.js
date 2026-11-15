@@ -449,6 +449,68 @@
     ok(window.DiaADia.texto('paris').indexOf('Louvre') > 0, 'texto para copiar');
   });
 
+  /* -------------------------------------------------------------- assistente */
+  grupo('Assistente "o que cabe?"');
+
+  function probReal(dias, orc, extra) {
+    const S = novoEstado();
+    App.calc = T.compute();
+    Object.assign(S.assist, { dias, orcamento: orc }, extra || {});
+    return window.Assistente.problema();
+  }
+
+  teste('Respeita o prazo e o orçamento (dados reais, 68 cidades)', () => {
+    const prob = probReal(14, 12000);
+    ['interesse', 'barata', 'equilibrada'].forEach(obj => {
+      const r = window.Assistente.otimizar(prob, obj, { ms: 5000, maxIter: 20000, semente: 7 });
+      ok(r.viavel || obj === 'barata', obj + ': inviável');
+      ok(r.noitesTotal <= prob.N, obj + ': noites ' + r.noitesTotal + ' > ' + prob.N);
+      ok(r.custo <= prob.orcamento + 1e-6, obj + ': custo ' + Math.round(r.custo) + ' > ' + Math.round(prob.orcamento));
+      ok(r.ordem.length >= 2, obj + ': poucas cidades');
+      igual(new Set(r.ordem).size, r.ordem.length, 'sem cidades repetidas');
+      r.noites.forEach(n => ok(n >= prob.nMin && n <= prob.nMax, 'noites fora do limite'));
+      // pontas fixas: Londres no começo e Cracóvia no fim
+      igual([prob.ids[r.ordem[0]], prob.ids[r.ordem[r.ordem.length - 1]]], ['londres', 'cracovia'], obj + ': pontas');
+    });
+  });
+
+  teste('Cidades obrigatórias entram, proibidas ficam de fora, estrelas pesam', () => {
+    const S = novoEstado();
+    App.calc = T.compute();
+    Object.assign(S.assist, { dias: 16, orcamento: 20000, obrig: ['praga'], proib: ['paris', 'berlim'], pontas: false });
+    S.interesse = { roma: 5, florenca: 5, veneza: 5 };
+    DATA.cities.forEach(c => { if (!(c.id in S.interesse) && c.id !== 'praga') S.interesse[c.id] = 1; });
+    const prob = window.Assistente.problema();
+    const r = window.Assistente.otimizar(prob, 'interesse', { ms: 5000, maxIter: 25000, semente: 3 });
+    const ids = r.ordem.map(i => prob.ids[i]);
+    ok(ids.indexOf('praga') >= 0, 'Praga é obrigatória');
+    ok(ids.indexOf('paris') < 0 && ids.indexOf('berlim') < 0, 'proibidas ficaram de fora');
+    ok(['roma', 'florenca', 'veneza'].filter(x => ids.indexOf(x) >= 0).length >= 2, 'as cidades de 5 estrelas entram: ' + ids.join());
+    ok(r.viavel);
+  });
+
+  teste('Orçamento apertado: a alternativa barata custa menos que a de mais interesse', () => {
+    const prob = probReal(12, 9000);
+    const a = window.Assistente.otimizar(prob, 'interesse', { ms: 5000, maxIter: 15000, semente: 11 });
+    const b = window.Assistente.otimizar(prob, 'barata', { ms: 5000, maxIter: 15000, semente: 23, minInteresse: a.interesse * 0.6, inicial: a });
+    ok(b.custo <= a.custo + 1e-6, 'barata ' + Math.round(b.custo) + ' × interesse ' + Math.round(a.custo));
+    ok(b.interesse >= a.interesse * 0.6 - 1e-6, 'mantém 60% do interesse');
+  });
+
+  teste('avaliar(): trecho longo consome parte do dia; custo soma diárias, pontos e trechos', () => {
+    const prob = probReal(12, 15000);
+    const i = id => prob.ids.indexOf(id);
+    const r = window.Assistente.avaliar(prob, [i('londres'), i('paris')], [3, 4], 45);
+    const leg = prob.legs[i('londres')][i('paris')];
+    const esperado = 3 * prob.custoNoite[i('londres')] + prob.custoFixo[i('londres')] + 4 * prob.custoNoite[i('paris')] + prob.custoFixo[i('paris')];
+    ok(leg.some(o => Math.abs(r.custo - esperado - o[1]) < 1e-6), 'custo = diárias + pontos + trecho');
+    igual(r.noites, 7);
+    prob.ideal = prob.ideal.map(() => 2); prob.estrelas = prob.estrelas.map(() => 3);      // cidades iguais: só o trecho muda
+    const perto1 = window.Assistente.avaliar(prob, [i('londres'), i('paris')], [3, 1], 45).interesse;
+    const longe1 = window.Assistente.avaliar(prob, [i('londres'), i('istambul')], [3, 1], 45).interesse;
+    ok(perto1 > longe1, 'uma noite depois de um trecho longo rende menos');
+  });
+
   /* ------------------------------------------------------------ utilitários */
   grupo('Utilitários');
 
