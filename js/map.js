@@ -37,7 +37,7 @@
   let projection, geoPath, zoom, T = d3.zoomIdentity;
   let features = null, ready = false, routeSig = null;
   let cityPts = [], poiPts = [], infoPts = [], vcp = { id: 'vcp', x: 0, y: 0 }, pxKm = 1;
-  let mover = null, drawTimer = null, cardTimer = null, lastPointer = 'mouse', pickCb = null;
+  let mover = null, drawTimer = null, cardTimer = null, lastPointer = 'mouse', pickCb = null, fotosOn = true;
   let card, tip;
 
   const esc = s => window.UI.esc(s);
@@ -169,6 +169,9 @@
     const km = [5, 2, 1].map(m => m * pow).find(v => v <= maxKm) || pow;
     scaleEl.querySelector('i').style.width = (km * pxKm).toFixed(1) + 'px';
     scaleEl.querySelector('span').textContent = km >= 1 ? km.toLocaleString('pt-BR') + ' km' : Math.round(km * 1000) + ' m';
+    // fotos dos pontos só com a escala abaixo de X km (a mesma barra que aparece na tela)
+    const on = km < (D.config.escalaFotosKm || 5);
+    if (on !== fotosOn) { fotosOn = on; if (features !== null || ready) M.update(); }
   }
 
   const cityPt = id => (id === 'vcp' ? vcp : cityPts.find(c => c.id === id));
@@ -521,12 +524,10 @@
   }
   function hideTip() { if (tip) tip.classList.remove('show'); }
 
-  // Ponto vira círculo com foto se a cidade dele está aberta e ele fica a até
-  // DATA.config.raioFotosKm do centro (os mais distantes continuam como pontinhos).
+  // Ponto vira círculo com foto se a cidade dele está aberta e o zoom está próximo
+  // (escala do mapa abaixo de DATA.config.escalaFotosKm); afastando, volta a ser pontinho.
   function fotoNoMapa(d, aberta) {
-    if (d.p.cityId !== aberta) return false;
-    if (d.km == null) d.km = A().distKm(A().city(d.p.cityId), d.p);
-    return d.km <= (D.config.raioFotosKm || 5);
+    return fotosOn && d.p.cityId === aberta;
   }
 
   /* ====================================================== estado → aparência */
