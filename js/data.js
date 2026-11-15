@@ -14,6 +14,7 @@ window.DATA = {
     orcamento: 15000,                 // orçamento total em R$
     iof: false,                       // somar IOF em valores em moeda estrangeira
     iofPct: 3.5,                      // percentual do IOF
+    spreadPct: 4,                     // spread padrão sobre a cotação comercial (cartão/casa de câmbio)
     noitesVooIda: 1,                  // noite passada em voo na ida (Brasil → Europa)
     escalaFotosKm: 5,                 // fotos dos pontos somem quando a escala do mapa chega a este valor (km)
     viajantes: 1,                     // nº de pessoas nas buscas de voos e hospedagem

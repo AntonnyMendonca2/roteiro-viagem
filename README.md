@@ -55,11 +55,15 @@ O projeto usa só caminhos relativos, então funciona em qualquer subpasta. O ar
 index.html      página única
 css/style.css   estilo (monocromático + 1 cor de destaque)
 js/data.js      objeto DATA: cidades, pontos de interesse, trechos, câmbio, itens gerais
+js/net.js       chamadas a APIs externas: cache no navegador (com validade) e filas por serviço
+js/cambio.js    câmbio automático (Frankfurter/BCE), spread e mini-gráficos de 90 dias
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
 .nojekyll       arquivo vazio (GitHub Pages)
 prompt.md       especificação original
+prompt-v2.md    especificação da atualização 2
+tests/          testes das funções puras (abra tests/index.html no navegador)
 ```
 
 ## Como personalizar
@@ -106,10 +110,32 @@ descartar o que estava salvo no navegador.
   dos pontos passam a ser medidos a partir dela. O número de pessoas fica em
   `DATA.config.viajantes` (`js/data.js`).
 - **Orçamento:** itens gerais, câmbio, IOF e orçamento total.
+- **Câmbio automático:** em **Orçamento → Câmbio**, o modo *Automático* busca a cotação do dia ao
+  abrir o app (guardada por 12 h) e mostra a data e a fonte; o modo *Manual* mantém o que você
+  digitar. O **spread** (padrão 4%) entra em toda conversão, junto com o IOF, porque cartão e casa
+  de câmbio cobram acima da cotação comercial. Cada moeda tem um mini-gráfico de 90 dias com a
+  variação e a posição em relação à média. O resumo mostra quanto o total mudou desde a cotação
+  anterior.
 - **Esc** ou **Ver Europa inteira** fecha o painel e volta ao zoom inicial.
 
 Os preços e tempos são aproximados e servem de referência — confira nos sites oficiais antes de
 comprar.
+
+## APIs externas
+
+Todas são gratuitas, sem chave e chamadas direto do navegador. As respostas ficam guardadas no
+`localStorage` (chaves `viagem-cache:*`) com validade; sem internet o app usa o que estiver
+guardado ou mostra um aviso discreto. Nenhuma chave de API fica no código do site.
+
+| Uso | Serviço | Validade do cache |
+|---|---|---|
+| Câmbio do dia e histórico de 90 dias | [Frankfurter](https://frankfurter.dev) (Banco Central Europeu) | 12 h |
+
+## Testes
+
+Abra `tests/index.html` no navegador (duplo clique ou pelo servidor local). A página carrega os
+scripts do app e roda os testes das funções puras, mostrando ✓/✗. O botão no fim da página confere
+se todos os títulos `wiki` devolvem foto (lento: ~1 por segundo).
 
 ## Créditos
 

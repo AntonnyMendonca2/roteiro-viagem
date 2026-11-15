@@ -67,6 +67,9 @@
       orcamento: D.config.orcamento,
       iof: !!D.config.iof,
       cambio: clone(D.cambio),
+      cambioModo: 'auto',                       // 'auto' (Frankfurter/BCE) ou 'manual'
+      spread: D.config.spreadPct,               // % acima da cotação comercial
+      cambioInfo: { data: '', fonte: '', ant: null, antData: '' },   // data da cotação e cotações anteriores
       cities: {}, pois: {}, legs: {}, gerais: {},
       tag: null,
       otim: { auto: true, criterio: 'tempo', fixarPontas: true }   // rota inteligente
@@ -102,9 +105,18 @@
     const s = defaults();
     try {
       const raw = window.localStorage.getItem(LS_KEY);
-      if (raw) merge(s, JSON.parse(raw));
+      if (raw) merge(s, migrar(JSON.parse(raw)));
     } catch (e) { /* sem localStorage (ou dado corrompido): segue com o padrão */ }
     return sanitize(s);
+  }
+
+  // Ajusta dados salvos por versões antigas do app (antes de completar com os padrões).
+  function migrar(src) {
+    if (!isObj(src)) return src;
+    // quem já tinha digitado o câmbio à mão continua no modo manual
+    if (src.cambioModo === undefined && isObj(src.cambio) &&
+        Object.keys(D.cambio).some(m => src.cambio[m] !== undefined && num(src.cambio[m]) !== D.cambio[m])) src.cambioModo = 'manual';
+    return src;
   }
 
   function save() {
@@ -117,6 +129,8 @@
     if (s.tag && D.tags.indexOf(s.tag) < 0) s.tag = null;
     if (!App.CRITERIOS[s.otim.criterio]) s.otim.criterio = 'tempo';
     s.otim.auto = !!s.otim.auto; s.otim.fixarPontas = !!s.otim.fixarPontas;
+    if (s.cambioModo !== 'manual') s.cambioModo = 'auto';
+    s.spread = Math.max(0, Math.min(30, num(s.spread)));
     return s;
   }
 
@@ -125,7 +139,8 @@
     v = num(v);
     if (!v || cur === 'BRL') return v;
     const taxa = num(App.state.cambio[cur]);
-    return v * taxa * (App.state.iof ? 1 + D.config.iofPct / 100 : 1);
+    // cotação comercial × spread (cartão/casa de câmbio) × IOF (se ligado)
+    return v * taxa * window.Cambio.fator(App.state.spread, App.state.iof, D.config.iofPct);
   };
 
   /* -------------------------------------------------------------------- rota */
@@ -367,7 +382,9 @@
   };
 
   /* --------------------------------------------------- cálculo geral (derivado) */
-  function compute() {
+  // opts.leve: pula a rota inteligente (usado em cálculos auxiliares, ex.: total com outro câmbio).
+  function compute(opts) {
+    const leve = !!(opts && opts.leve);
     const S = App.state;
     const route = App.route();
 
@@ -436,12 +453,19 @@
     const total = Object.keys(cats).reduce((a, k) => a + cats[k], 0);
 
     // rota inteligente: a ordem atual é a ótima? quanto se ganharia?
-    const crit = S.otim.criterio, ideal = App.optimize(route, route);
+    const crit = S.otim.criterio, ideal = leve ? route : App.optimize(route, route);
     const otim = { crit, ideal, atual: routeCost(route, crit), melhor: routeCost(ideal, crit) };
     otim.diff = Math.max(0, otim.atual - otim.melhor);
 
     return { route, legs, segs, segByCity, cats, cities, cen, total, base: total - cen.meu.brl, otim };
   }
+
+  // Total da viagem com outra tabela de câmbio (sem mexer no estado).
+  App.totalCom = function (cambio) {
+    const real = App.state.cambio;
+    App.state.cambio = cambio;
+    try { return compute({ leve: true }).total; } finally { App.state.cambio = real; }
+  };
 
   /* ------------------------------------------------------ consultas derivadas */
   // Ponto "ativo" = selecionado E com a cidade no roteiro.
@@ -525,10 +549,21 @@
   function computeAuto() {
     App.calc = compute();
     const o = App.calc.otim;
-    if (!App.state.otim.auto || o.diff <= App.OTIM_TOL[o.crit] || o.ideal.join() === App.calc.route.join()) return 0;
-    renumber(o.ideal);
-    App.calc = compute();
-    return o.diff;
+    let ganho = 0;
+    if (App.state.otim.auto && o.diff > App.OTIM_TOL[o.crit] && o.ideal.join() !== App.calc.route.join()) {
+      renumber(o.ideal);
+      App.calc = compute();
+      ganho = o.diff;
+    }
+    extras();
+    return ganho;
+  }
+
+  // Valores derivados que dependem de um segundo cálculo.
+  function extras() {
+    const info = App.state.cambioInfo;
+    // quanto o total mudou desde a cotação anterior (câmbio automático)
+    App.calc.deltaCambio = isObj(info.ant) ? App.calc.total - App.totalCom(merge(clone(App.state.cambio), info.ant)) : null;
   }
 
   App.refresh = function (modo) {
@@ -738,6 +773,7 @@
     const ganhoInicial = computeAuto();   // ordem salva ficou desatualizada? já abre otimizada
 
     UI.init();          // monta a interface (o mapa precisa dela para saber a área livre)
+    window.Cambio.bind();
     UI.renderAll();
     MapView.init();
     MapView.update();
@@ -746,6 +782,8 @@
       save();
       UI.toast('Roteiro reordenado para a melhor rota: ' + UI.otimTxt(ganhoInicial, App.state.otim.criterio) + ' a menos.');
     }
+
+    window.Cambio.init();   // busca as cotações (modo automático) e o histórico de 90 dias
 
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape') return;
@@ -763,5 +801,7 @@
     });
   }
 
-  init();
+  // Ganchos para a página de testes (tests/index.html), que carrega os scripts sem iniciar o app.
+  App._t = { defaults, merge, sanitize, compute, heldKarp, trainPath, pairCost, routeCost, legDef };
+  if (!window.VIAGEM_TESTE) init();
 })();

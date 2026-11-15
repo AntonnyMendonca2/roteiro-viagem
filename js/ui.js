@@ -9,6 +9,7 @@
 
   const D = window.DATA;
   const UI = window.UI = {};
+  UI.actions = {};                            // ações de clique registradas pelos módulos (data-act → função)
   const A = () => window.App;                 // App é criado depois (app.js)
 
   const $ = (sel, root) => (root || document).querySelector(sel);
@@ -338,6 +339,7 @@
         case 'hosp-show': { openDrawer(false); window.MapView.showHosp(id); break; }
         case 'legend': els.legend.classList.toggle('open'); break;
         case 'day': if (id) App.openCity(id); break;
+        default: if (UI.actions[act]) UI.actions[act](t, id, e);
       }
     });
     $('#btn-home').dataset.act = 'home';
@@ -467,7 +469,8 @@
     els.sumDetails.innerHTML =
       '<h5>Por cidade</h5>' + (porCidade.length ? barras(porCidade) : '<p class="muted">Nenhuma cidade no roteiro.</p>') +
       '<h5>Por categoria</h5>' + barras(porCat) +
-      (orc > 0 ? '<p class="muted">' + (c.total > orc ? 'Acima do orçamento em ' + Fmt.brl(c.total - orc) + '.' : 'Sobra ' + Fmt.brl(orc - c.total) + ' do orçamento.') + '</p>' : '');
+      (orc > 0 ? '<p class="muted">' + (c.total > orc ? 'Acima do orçamento em ' + Fmt.brl(c.total - orc) + '.' : 'Sobra ' + Fmt.brl(orc - c.total) + ' do orçamento.') + '</p>' : '') +
+      window.Cambio.resumoHtml();
   }
 
   /* ======================================================= render: comparativo */
@@ -640,11 +643,9 @@
       '<input id="f-orc" data-fid="f-orc" type="number" min="0" step="100" inputmode="decimal" data-path="orcamento" value="' + esc(S.orcamento) + '"></div>';
     html += '<h4>Itens gerais <b class="h-val" data-out="gerais"></b></h4>';
     html += D.gerais.map(g => money(g.nome, 'gerais.' + g.id)).join('');
-    html += '<h4>Câmbio <small>quanto vale 1 unidade, em reais</small></h4><div class="rates">' +
-      Object.keys(D.cambio).map(m => '<div class="field rate"><label for="f-c-' + m + '">' + m + '</label>' +
-        '<input id="f-c-' + m + '" data-fid="f-c-' + m + '" type="number" min="0" step="any" inputmode="decimal" data-path="cambio.' + m + '" value="' + esc(S.cambio[m]) + '"></div>').join('') + '</div>';
+    html += window.Cambio.html();
     html += '<label class="check"><input type="checkbox" data-fid="f-iof" data-path="iof"' + (S.iof ? ' checked' : '') +
-      '><span>Somar IOF ' + Fmt.num(D.config.iofPct) + '% <small>em valores em moeda estrangeira</small></span></label>';
+      '><span>Somar IOF ' + Fmt.num(D.config.iofPct) + '% <small>em valores em moeda estrangeira (além do spread)</small></span></label>';
     html += '<p class="muted">Os gastos de cada cidade (hospedagem, alimentação, transporte local, compras, outros) ficam no painel da cidade: clique nela no mapa ou em "Meu roteiro". Pontos de interesse só entram no total quando estão selecionados.</p>';
     return html;
   }

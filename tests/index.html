@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Testes — Mapa da Viagem</title>
+  <style>
+    body { background: #0e0e0e; color: #ececec; font: 14px/1.5 system-ui, sans-serif; margin: 0; padding: 24px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    #resumo { color: #909090; margin: 0 0 16px; }
+    #resumo.ok { color: #F5B841; }
+    h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: #b3b3b3; margin: 20px 0 6px; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { padding: 3px 0; border-bottom: 1px solid #222; display: flex; gap: 10px; }
+    li b { width: 18px; flex: none; }
+    li.ok b { color: #F5B841; }
+    li.falha { color: #fff; } li.falha b { color: #fff; }
+    li small { color: #909090; }
+    li.falha small { color: #ddd; }
+    button { background: #1e1e1e; color: #ececec; border: 1px solid #333; border-radius: 9px; padding: 8px 14px; cursor: pointer; font: inherit; }
+    button:hover { border-color: #F5B841; }
+    #lento-out { color: #909090; white-space: pre-wrap; font-size: 12.5px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Testes — Mapa da Viagem</h1>
+  <p id="resumo">Rodando…</p>
+  <div id="saida"></div>
+  <h2>Verificação lenta (sob demanda)</h2>
+  <p><button type="button" id="btn-wiki">Conferir as fotos de todos os <code>wiki</code> de DATA</button></p>
+  <div id="lento-out"></div>
+
+  <!-- Elementos mínimos que os scripts do app procuram -->
+  <div hidden><svg id="map"><defs></defs></svg><div id="tip"></div><div id="toast"></div></div>
+
+  <script>window.VIAGEM_TESTE = true;   // os scripts carregam, mas o app não inicia</script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="../js/data.js"></script>
+  <script src="../js/net.js"></script>
+  <script src="../js/map.js"></script>
+  <script src="../js/ui.js"></script>
+  <script src="../js/cambio.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="testes.js"></script>
+</body>
+</html>
