@@ -57,6 +57,7 @@ css/style.css   estilo (monocromático + 1 cor de destaque)
 js/data.js      objeto DATA: cidades, pontos de interesse, trechos, câmbio, itens gerais
 js/net.js       chamadas a APIs externas: cache no navegador (com validade) e filas por serviço
 js/cambio.js    câmbio automático (Frankfurter/BCE), spread e mini-gráficos de 90 dias
+js/clima.js     clima típico nas datas, previsão, nascer/pôr do sol e lista "o que levar"
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -116,6 +117,11 @@ descartar o que estava salvo no navegador.
   de câmbio cobram acima da cotação comercial. Cada moeda tem um mini-gráfico de 90 dias com a
   variação e a posição em relação à média. O resumo mostra quanto o total mudou desde a cotação
   anterior.
+- **Clima e luz do dia:** a linha do tempo mostra, em cada dia, a mínima/máxima típica e um ícone
+  (sol, nuvem, chuva, neve). O painel da cidade traz o bloco **Clima nas suas datas** (médias,
+  chance de chuva e de neve, horas de luz e pôr do sol). São médias dos últimos 10 anos; quando a
+  data está a até 16 dias, entra a previsão real. A aba Orçamento ganha a lista **O que levar**,
+  gerada pelas mínimas da viagem, como sugestão para o item "Roupas de frio".
 - **Esc** ou **Ver Europa inteira** fecha o painel e volta ao zoom inicial.
 
 Os preços e tempos são aproximados e servem de referência — confira nos sites oficiais antes de
@@ -130,6 +136,7 @@ guardado ou mostra um aviso discreto. Nenhuma chave de API fica no código do si
 | Uso | Serviço | Validade do cache |
 |---|---|---|
 | Câmbio do dia e histórico de 90 dias | [Frankfurter](https://frankfurter.dev) (Banco Central Europeu) | 12 h |
+| Clima histórico (10 anos) e previsão de 16 dias | [Open-Meteo](https://open-meteo.com) | 30 dias / 3 h |
 
 ## Testes
 

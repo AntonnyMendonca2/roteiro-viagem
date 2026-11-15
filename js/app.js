@@ -575,6 +575,7 @@
     }
     if (modo === 'light') UI.renderLight(); else UI.renderAll();
     MapView.update();
+    window.Clima.carregar();      // clima das cidades do roteiro (só busca o que falta)
   };
 
   /* -------------------------------------------------------------------- ações */
@@ -704,6 +705,7 @@
     App.focus = { type: 'city', id };
     UI.showDetail();
     MapView.focusCity(id);
+    window.Clima.carregar();
   };
   App.openPoi = function (id) {
     App.focus = { type: 'poi', id };
@@ -783,6 +785,7 @@
       UI.toast('Roteiro reordenado para a melhor rota: ' + UI.otimTxt(ganhoInicial, App.state.otim.criterio) + ' a menos.');
     }
 
+    window.Clima.carregar();
     window.Cambio.init();   // busca as cotações (modo automático) e o histórico de 90 dias
 
     document.addEventListener('keydown', e => {

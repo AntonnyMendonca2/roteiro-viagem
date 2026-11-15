@@ -104,6 +104,43 @@
     perto(st.varPct, 5, 1e-9); perto(st.media, 6.3, 1e-9); perto(st.vsMediaPct, 0, 1e-9);
   });
 
+  /* ----------------------------------------------------------------- clima */
+  grupo('Clima e luz do dia');
+
+  teste('Nascer e pôr do sol (NOAA): Paris em 06/03/2027', () => {
+    const s = window.Clima.sol(48.8566, 2.3522, new Date(Date.UTC(2027, 2, 6, 12)), 'Europe/Paris');
+    perto(s.nascerH, 7 + 21 / 60, 0.15, 'nascer ~07:21');
+    perto(s.porH, 18 + 41 / 60, 0.15, 'pôr ~18:41');
+    perto(s.luzH, 11.33, 0.2, 'horas de luz');
+  });
+
+  teste('Noite polar e sol da meia-noite (Rovaniemi fica perto do limite; Tromsø passa)', () => {
+    igual(window.Clima.solUTC(69.65, 18.96, new Date(Date.UTC(2026, 11, 21, 12))).polar, 'noite');
+    igual(window.Clima.solUTC(69.65, 18.96, new Date(Date.UTC(2027, 5, 21, 12))).polar, 'dia');
+  });
+
+  teste('Climatologia: média por dia do ano, % de chuva e de neve', () => {
+    const time = [], tx = [], tn = [], ch = [], nv = [];
+    for (let ano = 2016; ano < 2026; ano++) for (let dia = 1; dia <= 31; dia++) {
+      time.push(ano + '-03-' + String(dia).padStart(2, '0'));
+      tx.push(10); tn.push(2); ch.push(ano % 2 ? 5 : 0); nv.push(ano === 2016 ? 1 : 0);
+    }
+    const c = window.Clima.reduzir({ time, temperature_2m_max: tx, temperature_2m_min: tn, precipitation_sum: ch, snowfall_sum: nv });
+    const k = window.Clima.indice(3, 15);
+    perto(c.tx[k], 10); perto(c.tn[k], 2); igual(c.pc[k], 50); igual(c.pn[k], 10);
+    igual(c.tx[window.Clima.indice(7, 1)], null, 'sem dados em julho');
+  });
+
+  teste('Ícone do dia e lista "o que levar"', () => {
+    igual(window.Clima.icone({ tx: 0, tn: -5, pc: 40, pn: 45 }), 'neve');
+    igual(window.Clima.icone({ tx: 12, tn: 5, pc: 60, pn: 0 }), 'chuva');
+    igual(window.Clima.icone({ tx: 20, tn: 10, pc: 10, pn: 0 }), 'sol');
+    const l = window.Clima.listaLevar({ tmin: -3, tmax: 12, chuva: 40, neve: 25 });
+    ok(l.indexOf('luvas') >= 0 && l.indexOf('gorro') >= 0 && l.some(x => /segunda pele/.test(x)), 'frio abaixo de zero');
+    ok(l.some(x => /guarda-chuva/.test(x)), 'chuva frequente');
+    igual(window.Clima.listaLevar({ tmin: 18, tmax: 24, chuva: 5, neve: 0 }), []);
+  });
+
   /* ------------------------------------------------------------ utilitários */
   grupo('Utilitários');
 

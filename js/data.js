@@ -26,6 +26,20 @@ window.DATA = {
   simbolos: { BRL: 'R$', EUR: '€', GBP: '£', PLN: 'zł', CHF: 'CHF', HUF: 'Ft' },
   cambio: { EUR: 6.20, GBP: 7.40, PLN: 1.45, CHF: 6.60, HUF: 0.016 },   // 1 unidade = X reais
 
+  /* ------------------------------------------- fuso horário por país (código ISO numérico)
+     Usado para mostrar o nascer e o pôr do sol na hora local, mesmo sem internet. */
+  fusos: {
+    826: 'Europe/London', 250: 'Europe/Paris', 616: 'Europe/Warsaw', 276: 'Europe/Berlin', 620: 'Europe/Lisbon',
+    756: 'Europe/Zurich', 40: 'Europe/Vienna', 703: 'Europe/Bratislava', 348: 'Europe/Budapest', 380: 'Europe/Rome',
+    300: 'Europe/Athens', 724: 'Europe/Madrid', 372: 'Europe/Dublin', 528: 'Europe/Amsterdam', 56: 'Europe/Brussels',
+    442: 'Europe/Luxembourg', 203: 'Europe/Prague', 208: 'Europe/Copenhagen', 752: 'Europe/Stockholm', 578: 'Europe/Oslo',
+    246: 'Europe/Helsinki', 352: 'Atlantic/Reykjavik', 233: 'Europe/Tallinn', 428: 'Europe/Riga', 440: 'Europe/Vilnius',
+    705: 'Europe/Ljubljana', 191: 'Europe/Zagreb', 70: 'Europe/Sarajevo', 688: 'Europe/Belgrade', 499: 'Europe/Podgorica',
+    8: 'Europe/Tirane', 807: 'Europe/Skopje', 383: 'Europe/Belgrade', 100: 'Europe/Sofia', 642: 'Europe/Bucharest',
+    498: 'Europe/Chisinau', 470: 'Europe/Malta', 196: 'Asia/Nicosia', 792: 'Europe/Istanbul', 492: 'Europe/Monaco',
+    438: 'Europe/Vaduz', 674: 'Europe/San_Marino', 20: 'Europe/Andorra', 336: 'Europe/Vatican'
+  },
+
   /* ------------------------------------------------------------------ tags */
   tags: ['Harry Potter', 'Compras', 'Museu', 'Bate-volta', 'Futebol'],
 

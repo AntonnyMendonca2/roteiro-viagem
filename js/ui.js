@@ -515,8 +515,9 @@
         '<div class="tl-name">' + nome + '</div><div class="tl-days">' +
         dias.map(d => {
           const w = seg.type === 'cidade' ? avisos[seg.cityId + '|' + App.iso(d)] : '';
-          return '<button type="button" class="tl-day' + (w ? ' warn' : '') + '" data-act="day" data-id="' + esc(id) + '" title="' +
-            esc(w || (Fmt.dow(d) + ', ' + Fmt.data(d))) + '"><i>' + Fmt.dow(d) + '</i><b>' + Fmt.data(d) + '</b>' + (w ? '<u>!</u>' : '') + '</button>';
+          const wx = window.Clima.tlHtml(id, d);        // temperatura típica e ícone do clima
+          return '<button type="button" class="tl-day' + (w ? ' warn' : '') + '" data-act="day" data-id="' + esc(id) + '" data-dia="' + App.iso(d) + '" title="' +
+            esc(w || (Fmt.dow(d) + ', ' + Fmt.data(d) + (wx.titulo ? ' · ' + wx.titulo : ''))) + '"><i>' + Fmt.dow(d) + '</i><b>' + Fmt.data(d) + '</b>' + wx.html + (w ? '<u>!</u>' : '') + '</button>';
         }).join('') + '</div></div>';
     }).join('');
     els.timeline.innerHTML = c.route.length ? '<div class="tl-track">' + html + '</div>' : '';
@@ -643,6 +644,7 @@
       '<input id="f-orc" data-fid="f-orc" type="number" min="0" step="100" inputmode="decimal" data-path="orcamento" value="' + esc(S.orcamento) + '"></div>';
     html += '<h4>Itens gerais <b class="h-val" data-out="gerais"></b></h4>';
     html += D.gerais.map(g => money(g.nome, 'gerais.' + g.id)).join('');
+    html += window.Clima.levarHtml();           // "o que levar", pelas mínimas da viagem
     html += window.Cambio.html();
     html += '<label class="check"><input type="checkbox" data-fid="f-iof" data-path="iof"' + (S.iof ? ' checked' : '') +
       '><span>Somar IOF ' + Fmt.num(D.config.iofPct) + '% <small>em valores em moeda estrangeira (além do spread)</small></span></label>';
@@ -679,6 +681,7 @@
     html += '<button type="button" class="btn big' + (cs.sel ? '' : ' primary') + '" data-act="toggle-city" data-fid="tc-' + c.id + '" data-id="' + c.id + '">' +
       (cs.sel ? 'Remover cidade do roteiro' : '✓ Incluir cidade no roteiro') + '</button>';
     if (c.nota) html += '<p class="note">' + esc(c.nota) + '</p>';
+    html += window.Clima.cityHtml(c);
 
     if (cs.sel) {
       html += '<h4>Gastos na cidade</h4>' + D.categorias.map(k => money(k.nome, 'cities.' + c.id + '.custos.' + k.id)).join('');
@@ -820,6 +823,9 @@
     renderTimeline();
     renderOuts();
   };
+
+  // Dados do clima chegaram da rede: redesenha (mantém rolagem e foco).
+  UI.climaChegou = function () { UI.renderAll(); };
 
   // Atualização completa: recria abas e detalhes, preservando rolagem e foco.
   UI.renderAll = function () {
