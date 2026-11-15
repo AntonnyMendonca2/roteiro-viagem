@@ -102,15 +102,12 @@
     });
   };
 
-  /* ======================================== distância do ponto ao centro da cidade */
-  // Linha reta; o tempo a pé considera ~30% de desvio pelas ruas e 4,8 km/h.
+  /* ============================ distância do ponto à hospedagem (ou ao centro) */
+  // Distância e tempo a pé reais (pelas ruas) quando a matriz da cidade já foi buscada;
+  // senão, estimativa em linha reta × 1,3 a 4,8 km/h. Veja ape.js.
   UI.dist = function (p) {
-    const c = A().city(p.cityId), h = A().hosp(p.cityId), km = A().distKm(h || c, p);
-    const txt = '~' + (km < 1 ? Math.max(50, Math.round(km * 20) * 50) + ' m'
-      : (km < 10 ? Math.round(km * 10) / 10 : Math.round(km)).toLocaleString('pt-BR') + ' km');
-    const min = Math.round(km * 1.3 / 4.8 * 60);
-    const ape = km <= 6 ? (min < 60 ? Math.max(1, min) + ' min' : Fmt.horas(min / 60)) + ' a pé' : '';
-    return { km, curto: txt, longo: txt + (h ? ' da sua hospedagem' : ' do centro de ' + c.nome) + (ape ? ' · ~' + ape : '') };
+    const t = window.Ape.texto(p);
+    return { km: t.r.km, curto: t.curto, longo: t.longo };
   };
 
   /* ====================================== links de busca (voos e hospedagem) */
@@ -737,7 +734,7 @@
       '<p class="d-meta"><span class="st ' + (on ? 'on' : '') + '">' + (on ? 'Selecionado' : 'Não selecionado') + '</span>' + tagsHtml(p.tags) + '</p>' +
       '<button type="button" class="btn big' + (on ? '' : ' primary') + '" data-act="toggle-poi" data-fid="tpd-' + p.id + '" data-id="' + p.id + '">' +
       (on ? 'Remover do roteiro' : '✓ Incluir no roteiro') + '</button>' +
-      '<p class="dist">' + esc(UI.dist(p).longo) + '</p>' +
+      window.Ape.poiHtml(p) +
       '<p class="desc">' + esc(p.desc) + '</p>';
     if (w) html += '<p class="alert ' + w.nivel + '">' + esc(w.texto) + '</p>';
     (p.avisos || []).forEach(a => { if (!(w && p.fechado && /Fechado/.test(a))) html += '<p class="alert leve">' + esc(a) + '</p>'; });

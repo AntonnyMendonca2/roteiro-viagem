@@ -690,6 +690,7 @@
     MapView.update();
     window.Clima.carregar();      // clima das cidades do roteiro (só busca o que falta)
     window.Trilhos.carregar();    // traçado real e paisagens dos trechos de trem (só o que falta)
+    if (App.focus && App.focus.type !== 'info') window.Ape.carregar(App.focus.type === 'city' ? App.focus.id : App.poi(App.focus.id).cityId);
   };
 
   /* -------------------------------------------------------------------- ações */
@@ -816,21 +817,26 @@
   App.focus = null;   // { type: 'city' | 'poi' | 'info', id }
 
   App.openCity = function (id) {
+    window.Ape.limpar();
     App.focus = { type: 'city', id };
     UI.showDetail();
     MapView.focusCity(id);
+    window.Ape.carregar(id);      // tempos reais a pé entre a hospedagem e os pontos
     window.Clima.carregar();
   };
   App.openPoi = function (id) {
+    if (window.Ape.ativa !== id) window.Ape.limpar();
     App.focus = { type: 'poi', id };
     UI.showDetail();
     MapView.showPoi(id);
+    window.Ape.carregar(App.poi(id).cityId);
   };
   App.openInfo = function (id) {
     App.focus = { type: 'info', id };
     UI.showDetail();
   };
   App.closeDetail = function () {
+    window.Ape.limpar();
     App.focus = null;
     UI.hideDetail();
     MapView.update();          // fotos dos pontos voltam a ser pontinhos
@@ -891,6 +897,7 @@
     UI.init();          // monta a interface (o mapa precisa dela para saber a área livre)
     window.Cambio.bind();
     window.Trilhos.bind();
+    window.Ape.bind();
     UI.renderAll();
     MapView.init();
     MapView.update();

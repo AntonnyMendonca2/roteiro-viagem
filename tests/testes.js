@@ -263,6 +263,45 @@
     igual(r.find(i => i.trocas > 0).trocas, 3);
   });
 
+  /* -------------------------------------------------------- trajetos a pé */
+  grupo('Trajetos a pé');
+
+  teste('Sem matriz: estimativa em linha reta × 1,3 a 4,8 km/h', () => {
+    novoEstado();
+    const a = { lat: 48.85, lon: 2.35 }, b = { lat: 48.85 + 1 / 111.195, lon: 2.35 };      // ~1 km ao norte
+    const e = window.Ape.estimar(a, b);
+    perto(e.km, 1.3, 0.01); perto(e.min, 1.3 / 4.8 * 60, 0.2); igual(e.real, false);
+    const p = App.poi('louvre'), r = window.Ape.ate(p);
+    igual(r.real, false, 'sem matriz no cache, é estimativa');
+    ok(window.Ape.texto(p).longo.indexOf('estimativa') > 0);
+  });
+
+  teste('Com matriz no cache: usa tempo e distância reais (da hospedagem ou do centro)', () => {
+    novoEstado();
+    window.Ape.carregar = () => Promise.resolve(null);                 // sem rede nos testes
+    // descobre a chave que o módulo usaria e grava uma matriz falsa 2×2 (origem, Louvre)
+    const real = window.Net.peek;
+    let chave = null;
+    window.Net.peek = k => { if (/^ape:m:paris:/.test(k)) chave = k; return real(k); };
+    window.Ape.matrizDe('paris');
+    window.Net.peek = real;
+    ok(chave, 'chave da matriz');
+    const ids = ['_o'].concat(App.poisOf('paris').map(p => p.id));
+    const n = ids.length, dur = [], dist = [];
+    for (let i = 0; i < n; i++) { dur.push(new Array(n).fill(120)); dist.push(new Array(n).fill(1000)); }
+    window.Net.cacheSet(chave, { ids, dur, dist });
+    const r = window.Ape.ate(App.poi('louvre'));
+    igual(r.real, true); perto(r.min, 12); perto(r.km, 1);
+    ok(window.Ape.texto(App.poi('louvre')).longo.indexOf('pelas ruas') > 0);
+    window.Net.cacheDel(chave);
+  });
+
+  teste('Bate-volta distante fica fora da matriz e sugere transporte', () => {
+    novoEstado();
+    const t = window.Ape.texto(App.poi('disneyland'));
+    ok(t.longe && /linha reta/.test(t.longo));
+  });
+
   /* ------------------------------------------------------------ utilitários */
   grupo('Utilitários');
 

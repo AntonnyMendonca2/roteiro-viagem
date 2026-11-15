@@ -249,6 +249,9 @@ small { font-weight: 400; color: var(--muted); }
 .lvl-city .trip.off { opacity: .08; }
 .trip.sel { stroke: var(--accent); }
 
+/* caminho a pé ("Como chegar a pé" e trajeto do dia) */
+.walk { fill: none; stroke: var(--accent); stroke-width: calc(3.2px / var(--k)); stroke-linecap: round; stroke-linejoin: round; pointer-events: none; filter: drop-shadow(0 0 calc(2px / var(--k)) rgba(0, 0, 0, .9)); }
+
 /* paisagens no caminho do trem: pontinhos; com zoom próximo, círculos com foto */
 .cena .dot { fill: var(--panel); stroke: var(--accent); stroke-width: 1.3px; }
 .cena .thumb { opacity: 0; transform: scale(.3); pointer-events: none; transition: transform .4s cubic-bezier(.3, 1.5, .5, 1), opacity .25s ease; }
@@ -566,6 +569,9 @@ details.more > summary:hover { color: #fff; }
 .alert.forte { background: rgba(245, 184, 65, .1); border-left: 3px solid var(--accent); color: #fff; }
 .ref { font-size: 12.5px; color: #bdbdbd; }
 .dist { margin: 14px 0 0; font-size: 12.5px; color: #c4c4c4; padding-left: 10px; border-left: 2px solid var(--accent); }
+.dist-tip { margin: 6px 0 0; font-size: 12px; color: #bdbdbd; padding-left: 12px; }
+.dist + .btn.sm, .dist-tip + .btn.sm { margin-top: 8px; }
+.btn.sm.on { border-color: var(--accent); color: var(--accent); }
 .links { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .links .btn { font-size: 12.5px; padding: 7px 12px; text-decoration: none; }
 .link { display: inline-block; margin-top: 14px; color: var(--text); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #666; }

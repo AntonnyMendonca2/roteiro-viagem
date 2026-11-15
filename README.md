@@ -63,6 +63,7 @@ js/cambio.js    câmbio automático (Frankfurter/BCE), spread e mini-gráficos d
 js/clima.js     clima típico nas datas, previsão, nascer/pôr do sol e lista "o que levar"
 js/wiki.js      consultas à Wikipedia (lugares próximos, busca, popularidade) e filtros
 js/trilhos.js   traçado real dos trens, horários reais e paisagens no caminho
+js/ape.js       trajetos reais a pé (matriz de tempos da cidade e caminho desenhado)
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -147,6 +148,10 @@ descartar o que estava salvo no navegador.
   com o lado da janela, o horário aproximado e a sugestão de onde sentar; no mapa elas aparecem
   como pontinhos ao longo da linha (fotos com o zoom próximo). Em **Dados → Pré-carregar rotas
   dos trens** dá para guardar todos os traçados para uso sem internet.
+- **Trajetos a pé:** o painel do ponto mostra a distância e o tempo a pé **reais**, pelas ruas,
+  desde a sua hospedagem (ou do centro). **Como chegar a pé** desenha o caminho no mapa. Acima de
+  3 km o app sugere o transporte público, com o link do Google Maps. Sem internet, volta à
+  estimativa (linha reta × 1,3) e avisa "estimativa".
 - **Esc** ou **Ver Europa inteira** fecha o painel e volta ao zoom inicial.
 
 Os preços e tempos são aproximados e servem de referência — confira nos sites oficiais antes de
@@ -163,6 +168,7 @@ guardado ou mostra um aviso discreto. Nenhuma chave de API fica no código do si
 | Câmbio do dia e histórico de 90 dias | [Frankfurter](https://frankfurter.dev) (Banco Central Europeu) | 12 h |
 | Clima histórico (10 anos) e previsão de 16 dias | [Open-Meteo](https://open-meteo.com) | 30 dias / 3 h |
 | Traçado das ferrovias | [OpenRailRouting](https://routing.openrailrouting.org) (servidor comunitário: 1 requisição por vez) | 1 ano |
+| Tempos e caminhos a pé | [OSRM](https://routing.openstreetmap.de) perfil de pedestres (servidor comunitário: 1 por segundo) | 180 dias |
 | Horários reais de trem | [Transitous](https://transitous.org) | 24 h |
 | Fotos, lugares próximos e popularidade | Wikipedia / Wikimedia | 30 dias |
 

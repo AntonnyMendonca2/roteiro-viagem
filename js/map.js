@@ -60,7 +60,7 @@
     svg.select('defs').append('clipPath').attr('id', 'cena-clip').append('circle').attr('r', CENA_R);
     scaleEl = document.getElementById('scale');
     attribEl = document.getElementById('attrib');
-    ['countries', 'hatch', 'routes', 'trips', 'cenas', 'cities', 'pois', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
+    ['countries', 'hatch', 'routes', 'trips', 'walk', 'cenas', 'cities', 'pois', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
       L[n] = root.append('g').attr('class', 'l-' + n);
     });
     card = document.getElementById('hovercard');
@@ -96,6 +96,7 @@
     pxKm = Math.hypot(a[0] - b[0], a[1] - b[1]) / 111.2;
 
     drawCountries();
+    drawWalk();
     poiSig = null;
     drawMarkers();
     routeSig = null;
@@ -708,6 +709,24 @@
     if (ready) {
       const sig = calc.legs.map(l => l.key + ':' + l.modo).join('|');
       if (sig !== routeSig) { routeSig = sig; drawRoutes(true); }
+    }
+  };
+
+  // Caminho a pé no mapa (cor de destaque). coords = [[lon, lat], ...]; null apaga.
+  let walkCoords = null;
+  function drawWalk() {
+    L.walk.selectAll('path.walk').data(walkCoords ? [walkCoords] : []).join('path').attr('class', 'walk')
+      .attr('d', c => 'M' + c.map(p => { const q = projection(p); return q[0].toFixed(3) + ',' + q[1].toFixed(3); }).join('L'));
+  }
+  M.showWalk = function (coords, enquadrar) {
+    walkCoords = coords && coords.length > 1 ? coords : null;
+    drawWalk();
+    if (walkCoords && enquadrar) {
+      const pts = walkCoords.map(p => { const q = projection(p); return { x: q[0], y: q[1] }; });
+      const r = A().viewRect(), pad = A().isMobile() ? 40 : 90;
+      const x0 = d3.min(pts, d => d.x), x1 = d3.max(pts, d => d.x), y0 = d3.min(pts, d => d.y), y1 = d3.max(pts, d => d.y);
+      const k = Math.min(PX_KM_STREET / pxKm, (r.x1 - r.x0 - 2 * pad) / Math.max(x1 - x0, 1e-6), (r.y1 - r.y0 - 2 * pad) / Math.max(y1 - y0, 1e-6));
+      go(Math.max(1, k), (x0 + x1) / 2, (y0 + y1) / 2, 800);
     }
   };
 
