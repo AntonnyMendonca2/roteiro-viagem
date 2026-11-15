@@ -137,16 +137,38 @@ small { font-weight: 400; color: var(--muted); }
 }
 
 /* pontos de interesse: só aparecem a partir de certo zoom */
-.poi { opacity: 0; visibility: hidden; transition: opacity .35s ease, visibility .35s; }
-.lvl-city .poi { opacity: 1; visibility: visible; }
+.poi { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .35s ease, visibility .35s; }
+/* pointer-events muda na hora (sem transição): ao afastar o zoom, pontos que ainda estão
+   sumindo não podem "roubar" o clique da cidade */
+.lvl-city .poi { opacity: 1; visibility: visible; pointer-events: auto; }
 .poi .dot {
-  fill: var(--neutral); opacity: .55; stroke: var(--bg); stroke-width: 1.2px;
-  transition: fill .4s ease, opacity .4s ease;
+  fill: #a8a8a8; opacity: .9; stroke: #111; stroke-width: 1.5px;   /* contraste sobre o mapa de ruas */
+  transition: fill .4s ease, opacity .3s ease;
 }
 .poi:hover .dot, .poi.focus .dot { opacity: 1; stroke: #fff; }
 .poi.sel .dot { fill: var(--accent); opacity: 1; filter: drop-shadow(0 0 4px var(--accent)); }
 .lvl-city .poi.sel .pulse { animation: pulse 2.6s ease-out infinite; }
-.lvl-city .poi.off { opacity: .07; pointer-events: none; }
+.lvl-city .poi.off { opacity: .25; pointer-events: none; }
+
+/* círculo com foto (pontos da cidade aberta) */
+.poi .thumb {
+  opacity: 0; transform: scale(.3); pointer-events: none;
+  transition: transform .4s cubic-bezier(.3, 1.5, .5, 1), opacity .25s ease;
+}
+.lvl-city .poi.big .thumb { opacity: 1; transform: scale(1); pointer-events: auto; cursor: pointer; }
+.lvl-city .poi.big .dot { opacity: 0; }
+.th-bg { fill: #2a2a2a; }
+.th-ini { font-size: 10px; font-weight: 700; fill: #8a8a8a; pointer-events: none; }
+.poi image { filter: grayscale(1) brightness(.8); transition: filter .5s ease; }
+.poi.sel image, .poi:hover image, .poi.focus image { filter: none; }
+.th-ring { fill: none; stroke: #b5b5b5; stroke-width: 2px; }
+.poi.sel .th-ring { stroke: var(--accent); stroke-width: 3px; filter: drop-shadow(0 0 5px var(--accent)); }
+.poi.focus .th-ring, .poi:hover .th-ring { stroke: #fff; }
+.poi.sel.focus .th-ring { stroke: var(--accent); stroke-width: 4px; }
+.lvl-city .poi.big.sel .pulse { animation-name: pulseBig; }
+@keyframes pulseBig { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(1.7); opacity: 0; } }
+.thumb.ignite { animation: igniteThumb .7s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes igniteThumb { 0% { transform: scale(1); } 45% { transform: scale(1.4); } 100% { transform: scale(1); } }
 .poi .plbl {
   display: none; font-size: 11px; font-weight: 500; fill: #bdbdbd;
   paint-order: stroke; stroke: rgba(14, 14, 14, .92); stroke-width: 3px; stroke-linejoin: round;
@@ -159,8 +181,8 @@ small { font-weight: 400; color: var(--muted); }
 .poi.warn-forte .wbadge { fill: var(--accent); font-size: 14px; }
 
 /* minha hospedagem (só no zoom da cidade) */
-.hosp { opacity: 0; visibility: hidden; transition: opacity .35s ease, visibility .35s; }
-.lvl-city .hosp { opacity: 1; visibility: visible; }
+.hosp { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .35s ease, visibility .35s; }
+.lvl-city .hosp { opacity: 1; visibility: visible; pointer-events: auto; }
 .hosp .dot { fill: var(--accent); stroke: var(--bg); stroke-width: 1.5px; filter: drop-shadow(0 0 6px var(--accent)); }
 .hosp path { fill: var(--accent-ink); pointer-events: none; }
 

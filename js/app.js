@@ -682,6 +682,7 @@
   App.closeDetail = function () {
     App.focus = null;
     UI.hideDetail();
+    MapView.update();          // fotos dos pontos voltam a ser pontinhos
   };
   // Esc / "Ver Europa inteira": fecha o painel e volta ao zoom inicial.
   App.home = function () {

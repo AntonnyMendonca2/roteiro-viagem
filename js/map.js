@@ -28,7 +28,8 @@
   const REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const POI_ZOOM = 4;          // a partir deste zoom os pontos de interesse aparecem
   const PX_KM_MAX = 90;        // zoom máximo ao enquadrar uma cidade (px por km)
-  const PX_KM_STREET = 380;    // zoom ao abrir um ponto de interesse (px por km ≈ nível de ruas)
+  const PX_KM_STREET = 380;
+  const TH_R = 17;             // raio (px) do círculo com foto dos pontos da cidade aberta    // zoom ao abrir um ponto de interesse (px por km ≈ nível de ruas)
 
   let svg, node, root, hatch, tilesG, scaleEl, attribEl;
   let tilesCur = [], tilesZ = -1, lingering = [], lingerTimer = null;
@@ -51,6 +52,8 @@
     hatch = svg.select('#hatch');
     tilesG = svg.append('g').attr('class', 'l-tiles');      // mapa de ruas (coordenadas de tela)
     root = svg.append('g').attr('class', 'zoom-layer');
+    // recorte circular das fotos dos pontos
+    svg.select('defs').append('clipPath').attr('id', 'thumb-clip').append('circle').attr('r', TH_R);
     scaleEl = document.getElementById('scale');
     attribEl = document.getElementById('attrib');
     ['countries', 'hatch', 'routes', 'trips', 'cities', 'pois', 'hosp', 'info', 'mover', 'fx'].forEach(n => {
@@ -288,7 +291,14 @@
     const pois = L.pois.selectAll('g.poi').data(poiPts, d => d.id).join(enter => {
       const g = enter.append('g').attr('class', 'mk poi');
       g.append('circle').attr('class', 'pulse').attr('r', 5);
-      g.append('circle').attr('class', 'dot').attr('r', 4.5);
+      g.append('circle').attr('class', 'dot').attr('r', 5);
+      // círculo com a foto (aparece quando a cidade do ponto está aberta)
+      const t = g.append('g').attr('class', 'thumb');
+      t.append('circle').attr('class', 'th-bg').attr('r', TH_R);
+      t.append('text').attr('class', 'th-ini').attr('y', 4).attr('text-anchor', 'middle').text(d => window.UI.iniciais(d.p.nome));
+      t.append('image').attr('x', -TH_R).attr('y', -TH_R).attr('width', 2 * TH_R).attr('height', 2 * TH_R)
+        .attr('preserveAspectRatio', 'xMidYMid slice').attr('clip-path', 'url(#thumb-clip)');
+      t.append('circle').attr('class', 'th-ring').attr('r', TH_R);
       g.append('text').attr('class', 'wbadge').attr('x', 6).attr('y', -5).text('!');
       // nome do ponto (só aparece no nível das ruas)
       g.append('text').attr('class', 'plbl').attr('x', 9).attr('y', 4).text(d => d.p.nome.replace(/\s*\(.*\)\s*/g, ' ').trim());
@@ -383,7 +393,7 @@
 
   // Animação de "acender" ao selecionar (cinza → destaque, escala 1 → 1.4 → 1).
   M.ignite = function (type, id) {
-    const sel = (type === 'city' ? L.cities.selectAll('g.city') : L.pois.selectAll('g.poi')).filter(d => d.id === id).select('.dot');
+    const sel = (type === 'city' ? L.cities.selectAll('g.city') : L.pois.selectAll('g.poi')).filter(d => d.id === id).selectAll('.dot, .thumb');
     sel.classed('ignite', false);
     if (sel.node()) void sel.node().getBoundingClientRect();
     sel.classed('ignite', true);
@@ -524,15 +534,35 @@
         d3.select(this).select('.sub').text(S.cities[d.id].sel ? window.Fmt.brl(calc.cities[d.id] || 0) : '');
       });
 
+    // cidade aberta no painel: seus pontos viram círculos com foto
+    const f = App.focus;
+    const aberta = !f ? null : f.type === 'city' ? f.id : f.type === 'poi' ? App.poi(f.id).cityId : null;
+
     const pois = L.pois.selectAll('g.poi')
       .classed('sel', d => App.poiActive(d.id))
       .classed('off', d => !!tag && d.p.tags.indexOf(tag) < 0)
-      .classed('focus', d => !!App.focus && App.focus.type === 'poi' && App.focus.id === d.id)
+      .classed('focus', d => !!f && f.type === 'poi' && f.id === d.id)
+      .classed('big', d => d.p.cityId === aberta)
       .each(function (d) {
-        const w = App.poiWarn(d.p);
-        d3.select(this).classed('warn', !!w).classed('warn-forte', !!w && w.nivel === 'forte');
+        const g = d3.select(this), w = App.poiWarn(d.p), big = d.p.cityId === aberta;
+        g.classed('warn', !!w).classed('warn-forte', !!w && w.nivel === 'forte');
+        // posições do aviso "!", do nome e do pulso conforme o tamanho do marcador
+        g.select('.wbadge').attr('x', big ? TH_R - 4 : 6).attr('y', big ? -TH_R + 4 : -5);
+        g.select('.plbl').attr('x', big ? 0 : 9).attr('y', big ? TH_R + 13 : 4).attr('text-anchor', big ? 'middle' : 'start');
+        g.select('.pulse').attr('r', big ? TH_R : 5);
+        g.select('.hit').attr('r', big ? TH_R + 2 : 11);
+        if (big && !this.__foto) {                  // carrega a foto só quando for exibida
+          this.__foto = true;
+          window.Photos.get(d.p.wiki).then(src => {
+            if (src) { g.select('image').attr('href', src); g.classed('has-img', true); }
+            else this.__foto = false;
+          });
+        }
       });
+    // ordem de desenho: pontos da cidade aberta por cima; selecionados por cima dos demais
     pois.filter(d => App.poiActive(d.id)).raise();
+    pois.filter(d => d.p.cityId === aberta && !App.poiActive(d.id)).raise();
+    pois.filter(d => d.p.cityId === aberta && App.poiActive(d.id)).raise();
 
     L.trips.selectAll('path')
       .classed('sel', d => App.poiActive(d.id))

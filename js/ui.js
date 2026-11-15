@@ -55,13 +55,24 @@
   const MODO = { trem: 'Trem', aviao: 'Avião' };
 
   /* ===================================================== fotos (API da Wikipedia) */
+  // No máximo 4 buscas simultâneas na Wikipedia (evita o erro 429 ao abrir uma cidade com muitas fotos).
+  let fotosAtivas = 0;
+  const filaFotos = [];
+  const limitar = fn => new Promise((ok, falha) => {
+    const rodar = () => {
+      fotosAtivas++;
+      fn().then(ok, falha).finally(() => { fotosAtivas--; if (filaFotos.length) filaFotos.shift()(); });
+    };
+    if (fotosAtivas < 4) rodar(); else filaFotos.push(rodar);
+  });
+
   const Photos = window.Photos = {
     cache: new Map(),       // título → Promise<url | null>
     get(title) {
       if (!title) return Promise.resolve(null);
       if (this.cache.has(title)) return this.cache.get(title);
       const url = 'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title);
-      const p = fetch(url)
+      const p = limitar(() => fetch(url))
         .then(r => {
           if (r.status === 429) { this.cache.delete(title); return null; }   // limite de requisições: tenta de novo depois
           return r.ok ? r.json() : null;
@@ -73,7 +84,7 @@
     }
   };
 
-  const iniciais = nome => nome.replace(/\(.*?\)/g, '').split(/[\s/–-]+/)
+  const iniciais = UI.iniciais = nome => nome.replace(/\(.*?\)/g, '').split(/[\s/–-]+/)
     .filter(w => w.length > 2 || /^[A-ZÀ-Ý0-9]/.test(w)).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '•';
 
   // Bloco de foto: começa como placeholder com iniciais; a imagem entra quando carregar.
