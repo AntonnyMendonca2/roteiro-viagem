@@ -26,7 +26,8 @@
     num: n => (+n || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 }),
     moeda: (v, cur) => {
       const s = D.simbolos[cur] || cur, n = Fmt.num(v);
-      return (cur === 'PLN' || cur === 'HUF') ? n + ' ' + s : s + (s.length > 1 ? ' ' : '') + n;
+      // símbolo antes: R$, €, £, CHF, ₺ · nas demais, o código depois do valor ("kr" e "L" são ambíguos)
+      return ['BRL', 'EUR', 'GBP', 'CHF', 'TRY'].indexOf(cur) >= 0 ? s + (s.length > 1 ? ' ' : '') + n : n + ' ' + (cur === 'PLN' || cur === 'HUF' ? s : cur);
     },
     horas: h => {
       let hh = Math.floor(h + 1e-9), mm = Math.round((h - hh) * 60 / 5) * 5;
@@ -52,34 +53,25 @@
     aviao: 'M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z',
     trem: 'M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2.23l2-2H14l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-7H6V6h5v4zm2 0V6h5v4h-5zm3.5 7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z'
   };
+  ICONS.onibus = 'M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4s-8 .5-8 4v10zm3.5 1c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm9 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm1.5-6H6V6h12v5z';
+  ICONS.balsa = 'M20 21c-1.39 0-2.78-.47-4-1.32-2.44 1.71-5.56 1.71-8 0C6.78 20.53 5.39 21 4 21H2v2h2c1.38 0 2.74-.35 4-.99 2.52 1.29 5.48 1.29 8 0 1.26.65 2.62.99 4 .99h2v-2h-2zM3.95 19H4c1.6 0 3.02-.88 4-2 .98 1.12 2.4 2 4 2s3.02-.88 4-2c.98 1.12 2.4 2 4 2h.05l1.89-6.68c.08-.26.06-.54-.06-.78s-.34-.42-.6-.5L20 10.62V6c0-1.1-.9-2-2-2h-3V1H9v3H6c-1.1 0-2 .9-2 2v4.62l-1.29.42c-.26.08-.48.26-.6.5s-.15.52-.06.78L3.95 19zM6 6h12v3.97L12 8 6 9.97V6z';
   const icon = name => '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="' + ICONS[name] + '"/></svg>';
-  const MODO = { trem: 'Trem', aviao: 'Avião' };
+  const MODO = UI.MODO = { trem: 'Trem', onibus: 'Ônibus', balsa: 'Balsa', aviao: 'Avião' };
+  UI.icon = icon;
 
   /* ===================================================== fotos (API da Wikipedia) */
-  // No máximo 4 buscas simultâneas na Wikipedia (evita o erro 429 ao abrir uma cidade com muitas fotos).
-  let fotosAtivas = 0;
-  const filaFotos = [];
-  const limitar = fn => new Promise((ok, falha) => {
-    const rodar = () => {
-      fotosAtivas++;
-      fn().then(ok, falha).finally(() => { fotosAtivas--; if (filaFotos.length) filaFotos.shift()(); });
-    };
-    if (fotosAtivas < 4) rodar(); else filaFotos.push(rodar);
-  });
-
+  // As buscas passam pela fila "wiki" do net.js (no máximo 4 simultâneas, com intervalo — a
+  // Wikipedia devolve erro 429 se for mais rápido) e o endereço da foto fica 30 dias no cache.
   const Photos = window.Photos = {
     cache: new Map(),       // título → Promise<url | null>
     get(title) {
       if (!title) return Promise.resolve(null);
       if (this.cache.has(title)) return this.cache.get(title);
       const url = 'https://en.wikipedia.org/api/rest_v1/page/summary/' + encodeURIComponent(title);
-      const p = limitar(() => fetch(url))
-        .then(r => {
-          if (r.status === 429) { this.cache.delete(title); return null; }   // limite de requisições: tenta de novo depois
-          return r.ok ? r.json() : null;
-        })
-        .then(j => (j && ((j.thumbnail && j.thumbnail.source) || (j.originalimage && j.originalimage.source))) || null)
-        .catch(() => null);
+      const p = window.Net.getJSON(url, { fila: 'wiki', ttl: 30 * window.Net.DIA, chave: 'foto:' + title,
+        reduzir: j => (j && ((j.thumbnail && j.thumbnail.source) || (j.originalimage && j.originalimage.source))) || null })
+        .then(r => r.data)
+        .catch(() => { this.cache.delete(title); return null; });      // erro (429, sem internet): tenta de novo depois
       this.cache.set(title, p);
       return p;
     }
@@ -149,10 +141,10 @@
   // Linhas de voo para uma cidade (trecho de chegada e, se for a última, a volta).
   UI.flightRows = function (cityId) {
     return A().flightsFor(cityId).map(f => {
-      const trem = f.leg && f.leg.modo === 'trem';
+      const trem = f.leg && f.leg.modo !== 'aviao' ? MODO[f.leg.modo].toLowerCase() : '';
       return '<div class="fl-row"><div class="fl-t"><b>' + esc(nomeDe(f.from)) + ' → ' + esc(nomeDe(f.to)) + '</b>' +
         '<small>' + Fmt.dow(f.date) + ', ' + Fmt.data(f.date) + (f.fora ? ' · cidade fora do roteiro' : '') +
-        (trem ? ' · no roteiro este trecho é de trem' : '') + '</small></div>' +
+        (trem ? ' · no roteiro este trecho é de ' + trem : '') + '</small></div>' +
         '<div class="links tight">' + linkBtns(UI.linksVoo(f.from, f.to, f.date)) + '</div></div>';
     }).join('');
   };
@@ -161,13 +153,15 @@
   UI.showCountryCard = function (iso, nomePais, x, y) {
     const App = A(), card = els.flightcard;
     const doPais = D.cities.filter(c => c.paisIso === iso);
-    if (iso === D.infoArea.paisIso) return;
+    const area = (D.infoAreas || [D.infoArea]).find(a => a.paisIso === iso);
+    if (area && !area.aviso) return;
     const noRoteiro = doPais.filter(c => App.state.cities[c.id].sel);
     const lista = noRoteiro.length ? noRoteiro : doPais;
     const titulo = doPais.length ? doPais[0].pais : nomePais;
-    card.innerHTML = '<div class="fc-head"><div><div class="kicker">Passagens aéreas</div><h3>' + esc(titulo) + '</h3></div>' +
+    card.innerHTML = '<div class="fc-head"><div><div class="kicker">' + (area ? 'Somente informativo' : 'Passagens aéreas') + '</div><h3>' + esc(area ? area.pais : titulo) + '</h3></div>' +
       '<button type="button" class="fc-x" data-act="fc-close" aria-label="Fechar">×</button></div>' +
-      (lista.length
+      (area ? '<p class="alert forte">' + esc(area.aviso) + '</p><p class="muted">Este país aparece no mapa só como referência: não pode ser incluído no roteiro.</p>'
+        : lista.length
         ? lista.map(c => UI.flightRows(c.id)).join('') +
           '<p class="muted">Os preços aparecem no site de cada buscador. Datas e cidades vêm do seu roteiro.</p>'
         : '<p class="muted">Nenhuma cidade deste país está cadastrada no roteiro.</p>');
@@ -328,6 +322,7 @@
         case 'fit-core': window.MapView.focusCity(id); break;
         case 'tag': App.setTag(t.dataset.tag || null); break;
         case 'home': App.home(); break;
+        case 'fit-route': App.closeDetail(); window.MapView.fitRoute(); break;
         case 'export': App.exportJSON(); break;
         case 'import': els.file.value = ''; els.file.click(); break;
         case 'reset': App.reset(); break;
@@ -377,7 +372,23 @@
       r.readAsText(f);
     });
 
+    // busca em "Adicionar cidade": esconde o que não combina, sem recriar a lista
+    els.sidebar.addEventListener('input', e => {
+      if (e.target.dataset.filtro) { UI.buscaCidade = e.target.value; filtrarCidades(); }
+    });
+
     bindDrag();
+  }
+
+  const semAcento = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  function filtrarCidades() {
+    const q = semAcento(UI.buscaCidade || '').trim();
+    $$('#add-cities .add-pais').forEach(g => {
+      const pais = !q || semAcento(g.dataset.busca).indexOf(q) >= 0;
+      let algum = false;
+      $$('.chip', g).forEach(c => { const ok = pais || semAcento(c.dataset.busca).indexOf(q) >= 0; c.hidden = !ok; if (ok) algum = true; });
+      g.hidden = !algum;
+    });
   }
 
   // Reordenar cidades do roteiro arrastando os cartões.
@@ -487,8 +498,8 @@
     };
     els.compare.innerHTML = '<h4>Comparativo de transporte <small>total entre cidades · diferença p/ o meu roteiro</small></h4>' +
       (c.legs.length
-        ? '<div class="cmp-grid">' + col('trem', 'Cenário trem', icon('trem')) + col('aviao', 'Cenário avião', icon('aviao')) + col('meu', 'Meu roteiro', '') + '</div>'
-        : '<p class="muted">Inclua uma cidade para comparar trem e avião.</p>');
+        ? '<div class="cmp-grid">' + col('terrestre', 'Cenário terrestre', icon('trem')) + col('aviao', 'Cenário avião', icon('aviao')) + col('meu', 'Meu roteiro', '') + '</div>'
+        : '<p class="muted">Inclua uma cidade para comparar os meios de transporte.</p>');
   }
 
   /* ==================================================== render: linha do tempo */
@@ -539,20 +550,22 @@
       b.setAttribute('aria-selected', String(on));
     });
     els.views.innerHTML = tab === 'roteiro' ? viewRoteiro() : tab === 'orcamento' ? viewOrcamento() : viewDados();
+    if (tab === 'roteiro' && UI.buscaCidade) filtrarCidades();
   }
 
   function legCard(leg) {
     const App = A(), key = esc(leg.key), o = leg.opts[leg.modo], tx = UI.legText(leg, leg.modo);
-    const dois = leg.opts.trem && leg.opts.aviao;
+    const disp = App.MODOS.filter(m => leg.opts[m]);            // só os meios disponíveis neste trecho
     const btn = m => '<button type="button" data-act="mode" data-leg="' + key + '" data-mode="' + m + '" data-fid="m-' + key + '-' + m + '" class="' +
-      (leg.modo === m ? 'on' : '') + '"' + (leg.opts[m] ? '' : ' disabled') + ' aria-pressed="' + (leg.modo === m) + '">' + icon(m) + MODO[m] + '</button>';
+      (leg.modo === m ? 'on' : '') + '" aria-pressed="' + (leg.modo === m) + '">' + icon(m) + MODO[m] + '</button>';
 
     let html = '<li class="leg ' + leg.modo + '">' +
       '<div class="leg-head"><span class="leg-title">' + esc(tx.titulo) + '</span>' + (leg.est ? '<span class="est">estimativa</span>' : '') + '</div>';
-    html += '<div class="seg" role="group" aria-label="Meio de transporte">' + btn('trem') + btn('aviao') + '</div>';
+    html += '<div class="seg" role="group" aria-label="Meio de transporte">' + disp.map(btn).join('') + '</div>';
     html += '<p class="leg-info">' + esc(tx.desc) + ' · ' + esc(tx.tempo) + (o.eur ? ' · ' + Fmt.faixaEur(o.eur) : '') +
       ' <b data-out="leg-cost:' + key + '"></b></p>';
-    if (!dois && !leg.intl) html += '<p class="warn-line">' + esc(leg.aviso || (leg.opts.trem ? 'Somente trem neste trecho.' : 'Sem trem viável neste trecho — somente avião.')) + '</p>';
+    if (o.noturno) html += '<p class="leg-via">Há opção noturna (dorme a bordo e economiza uma diária).</p>';
+    if (!leg.intl && (leg.aviso || disp.length === 1)) html += '<p class="warn-line">' + esc(leg.aviso || 'Somente ' + MODO[disp[0]].toLowerCase() + ' neste trecho.') + '</p>';
     if (o.vias.length && !o.pernoite) html += '<p class="leg-via">' + (o.vias.length > 1 ? 'Paradas em ' : 'Parada em ') + esc(o.vias.map(v => v.nome).join(', ')) + '</p>';
     if (o.pernoite && o.via) {
       html += '<label class="check"><input type="checkbox" data-full data-fid="pn-' + key + '" data-path="legs.' + key + '.pernoite"' + (leg.st.pernoite ? ' checked' : '') +
@@ -582,7 +595,7 @@
       status = '<div class="sm-warn"><p>A ordem atual tem <b>' + UI.otimTxt(c.diff, c.crit) + ' a mais</b> que a melhor rota:<br><small>' + esc(nomes) + '</small></p>' +
         '<button type="button" class="btn pill primary" data-act="optimize" data-fid="btn-otim">Otimizar agora</button></div>';
     } else if (pode) {
-      status = '<p class="sm-ok">✓ Esta é a melhor ordem (' + App.CRITERIOS[c.crit].toLowerCase() + ').</p>';
+      status = '<p class="sm-ok">✓ ' + (App.rotaAproximada(n) ? 'Rota aproximada: com tantas cidades, a ordem é calculada por heurística' : 'Esta é a melhor ordem') + ' (' + App.CRITERIOS[c.crit].toLowerCase() + ').</p>';
     }
     return '<section class="smart">' +
       '<div class="sm-head"><label class="check sm-auto"><input type="checkbox" data-otim="auto" data-fid="otim-auto"' + (o.auto ? ' checked' : '') +
@@ -632,8 +645,14 @@
 
     const fora = D.cities.filter(ci => !S.cities[ci.id].sel);
     if (fora.length) {
-      html += '<h4>Adicionar cidade</h4><div class="chips wrap">' +
-        fora.map(ci => '<button type="button" class="chip add" data-act="add-city" data-id="' + ci.id + '">+ ' + esc(ci.nome) + '</button>').join('') + '</div>';
+      const paises = [];
+      fora.forEach(ci => { if (paises.indexOf(ci.pais) < 0) paises.push(ci.pais); });
+      paises.sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      html += '<h4>Adicionar cidade <small>' + fora.length + ' destinos</small></h4>' +
+        '<input type="text" id="f-busca-cidade" data-fid="f-busca-cidade" data-filtro="#add-cities" placeholder="Buscar cidade ou país…" autocomplete="off" value="' + esc(UI.buscaCidade || '') + '">' +
+        '<div id="add-cities">' + paises.map(p => '<div class="add-pais" data-busca="' + esc(p.toLowerCase()) + '"><span>' + esc(p) + '</span><div class="chips wrap">' +
+          fora.filter(ci => ci.pais === p).map(ci => '<button type="button" class="chip add" data-act="add-city" data-id="' + ci.id + '" data-busca="' + esc(ci.nome.toLowerCase()) + '">+ ' + esc(ci.nome) + '</button>').join('') +
+          '</div></div>').join('') + '</div>';
     }
     return html;
   }
@@ -805,9 +824,9 @@
       [sw('<circle r="5.5" class="lg-acc"/><circle r="9" class="lg-ring"/>'), 'Cidade no roteiro'],
       [sw('<circle r="4.5" class="lg-neu"/>'), 'Cidade fora do roteiro'],
       [sw('<circle cx="-7" r="4" class="lg-acc"/><circle cx="7" r="4" class="lg-neu"/>'), 'Ponto selecionado / neutro'],
-      [sw('<path d="M-18,3 Q0,6 18,3" class="lg-line"/><g class="lg-badge"><circle r="8"/>' + ic('trem') + '</g>'), 'Trecho de trem'],
+      [sw('<path d="M-18,3 Q0,6 18,3" class="lg-line"/><g class="lg-badge"><circle r="8"/>' + ic('trem') + '</g>'), 'Trecho por terra (trem, ônibus ou balsa)'],
       [sw('<path d="M-18,6 Q0,-12 18,6" class="lg-line"/><g class="lg-badge" transform="translate(0,-3)"><circle r="8"/>' + ic('aviao') + '</g>'), 'Trecho de avião'],
-      [sw('<path d="M-18,0 H18" class="lg-alt"/>'), 'Alternativa (modo não escolhido)'],
+      [sw('<path d="M-18,0 H18" class="lg-alt"/>'), 'Alternativa (terra × avião)'],
       [sw('<path d="M-18,0 H18" class="lg-trip"/>'), 'Bate-volta'],
       [sw('<rect x="-16" y="-7" width="32" height="14" rx="2" class="lg-hatch"/><path d="M0,-6 L6,5 L-6,5 Z" class="lg-warn"/>'), 'Área informativa (não selecionável)']
     ];

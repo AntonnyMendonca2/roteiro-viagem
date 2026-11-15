@@ -160,65 +160,100 @@
     return 2 * R * Math.asin(Math.sqrt(x));
   }
 
-  // Estimativa automática para pares de cidades que não estão na tabela de trechos.
-  // Caminho de trem mais rápido usando só os trechos da tabela (Dijkstra).
-  // Ex.: Londres → Zurique = Eurostar até Paris + TGV Lyria.
-  const BALDEACAO_H = 0.5;   // tempo de troca de trem em cada parada
+  /* ------------------------------------------------- meios de transporte */
+  const MODOS = D.modos || ['trem', 'aviao'];                    // trem, ônibus, balsa, avião
+  const TERRESTRES = D.modosTerrestres || ['trem'];
+  App.MODOS = MODOS; App.TERRESTRES = TERRESTRES;
+  const BALDEACAO_H = 0.5;   // tempo de troca em cada parada
+  const MAX_TERRA_H = 30;    // acima disso o caminho por terra não é oferecido
   const midH = o => (o.h[0] + o.h[o.h.length - 1]) / 2;
 
-  function trainPath(from, to) {
+  // índice dos trechos da tabela: "a~b" (ordenado) → trecho
+  const legIdx = {};
+  const parKey = (a, b) => (a < b ? a + '~' + b : b + '~' + a);
+  D.legs.forEach(l => { legIdx[parKey(l.a, l.b)] = l; });
+  // vizinhos de cada cidade na rede (para o Dijkstra)
+  const vizinhos = {};
+  D.legs.forEach(l => { (vizinhos[l.a] = vizinhos[l.a] || []).push(l); (vizinhos[l.b] = vizinhos[l.b] || []).push(l); });
+
+  // Caminho mais rápido usando só os trechos da tabela e os modos permitidos (Dijkstra).
+  // Ex.: Londres → Zurique de trem = Eurostar até Paris + TGV Lyria.
+  const memoCaminho = {};
+  function caminho(from, to, modos) {
+    const chave = from + '>' + to + '|' + modos.join();
+    if (chave in memoCaminho) return memoCaminho[chave];
+    // melhor modo permitido de um trecho
+    const melhor = l => {
+      let m = null;
+      modos.forEach(k => { if (l[k] && (!m || midH(l[k]) < midH(l[m]))) m = k; });
+      return m;
+    };
     const dist = {}, prev = {}, edge = {}, done = {};
-    D.cities.forEach(c => { dist[c.id] = Infinity; });
     dist[from] = 0;
     for (;;) {
       let u = null;
-      D.cities.forEach(c => { if (!done[c.id] && dist[c.id] < Infinity && (u === null || dist[c.id] < dist[u])) u = c.id; });
+      Object.keys(dist).forEach(id => { if (!done[id] && (u === null || dist[id] < dist[u])) u = id; });
       if (u === null || u === to) break;
       done[u] = true;
-      D.legs.forEach(l => {
-        if (!l.trem || (l.a !== u && l.b !== u)) return;
-        const v = l.a === u ? l.b : l.a, w = dist[u] + midH(l.trem) + BALDEACAO_H;
-        if (w < dist[v]) { dist[v] = w; prev[v] = u; edge[v] = l; }
+      (vizinhos[u] || []).forEach(l => {
+        const m = melhor(l);
+        if (!m) return;
+        const v = l.a === u ? l.b : l.a, w = dist[u] + midH(l[m]) + BALDEACAO_H;
+        if (dist[v] === undefined || w < dist[v]) { dist[v] = w; prev[v] = u; edge[v] = { l, m }; }
       });
     }
-    if (dist[to] === Infinity) return null;
-    const ids = [to], legs = [];
-    for (let x = to; x !== from; x = prev[x]) { ids.unshift(prev[x]); legs.unshift(edge[x]); }
-    const vias = [];
-    legs.forEach((l, i) => {
-      if (l.trem.via) vias.push(l.trem.via);
-      if (i < legs.length - 1) vias.push({ cityId: ids[i + 1] });
-    });
-    const h = legs.reduce((s, l) => s + midH(l.trem), 0) + BALDEACAO_H * (legs.length - 1);
-    return {
-      desc: legs.map(l => l.trem.desc).join(' + '),
-      h: [h, h],
-      eur: [legs.reduce((s, l) => s + l.trem.eur[0], 0), legs.reduce((s, l) => s + l.trem.eur[1], 0)],
-      vias
-    };
+    let res = null;
+    if (dist[to] !== undefined) {
+      const ids = [to], es = [];
+      for (let x = to; x !== from; x = prev[x]) { ids.unshift(prev[x]); es.unshift(edge[x]); }
+      const vias = [];
+      es.forEach((e, i) => {
+        const o = e.l[e.m];
+        if (o.via) vias.push(o.via);
+        if (i < es.length - 1) vias.push({ cityId: ids[i + 1] });
+      });
+      const h = es.reduce((t, e) => t + midH(e.l[e.m]), 0) + BALDEACAO_H * Math.max(0, es.length - 1);
+      const usados = [];
+      es.forEach(e => { if (usados.indexOf(e.m) < 0) usados.push(e.m); });
+      res = {
+        desc: es.map(e => e.l[e.m].desc).join(' + '),
+        h: [h, h],
+        eur: [es.reduce((t, e) => t + e.l[e.m].eur[0], 0), es.reduce((t, e) => t + e.l[e.m].eur[1], 0)],
+        vias, modos: usados, trechos: es.length
+      };
+    }
+    memoCaminho[chave] = res;
+    return res;
   }
+  // Caminho só de trem (mantido com este nome para os testes e para a rede ferroviária).
+  const trainPath = (from, to) => caminho(from, to, ['trem']);
 
-  // Estimativa para pares que não estão na tabela de trechos.
+  // Estimativa para pares que não estão na tabela de trechos: por terra, só pela rede
+  // da tabela (trem puro e, se for bem mais rápido, a combinação com ônibus/balsa);
+  // de avião, pela distância (+ o traslado de cidades sem aeroporto).
+  const memoEst = {};
   function estimar(from, to) {
+    const chave = from + '>' + to;
+    if (memoEst[chave]) return memoEst[chave];
     const E = D.estimativa, a = cityById[from], b = cityById[to];
     const km = distKm(a, b);
-    const semTrem = a.semTrem || b.semTrem;
-    let trem = null;
-    if (!semTrem) {
-      const h = km / E.tremKmh + E.tremExtraH, eur = Math.max(E.tremEurMin, km * E.tremEurPorKm);
-      const direto = { desc: 'Trem (~' + Math.round(km) + ' km)', h: [h, h], eur: [Math.round(eur * 0.7 / 5) * 5, Math.round(eur * 1.3 / 5) * 5] };
-      const rede = trainPath(from, to);
-      // cidade que só sai de trem pelos trechos da tabela (ex.: Londres → Eurostar): usa a rede, sempre.
-      // nas demais, a rede vale se não for muito mais lenta que a linha reta (que é otimista).
-      if (a.tremSoListado || b.tremSoListado) trem = rede;
-      else trem = rede && rede.h[0] <= direto.h[0] * 1.2 ? rede : direto;
+    const def = { padrao: 'aviao', trem: null, onibus: null, balsa: null, aviao: null, aviso: '' };
+    const trem = trainPath(from, to), misto = caminho(from, to, TERRESTRES);
+    if (trem && trem.h[0] <= MAX_TERRA_H) def.trem = trem;
+    if (misto && misto.h[0] <= MAX_TERRA_H && misto.modos.some(m => m !== 'trem') && (!def.trem || misto.h[0] < def.trem.h[0] * 0.85)) {
+      def[misto.modos.indexOf('onibus') >= 0 ? 'onibus' : 'balsa'] = misto;
     }
-    return {
-      padrao: !trem || trem.h[0] > 9 ? 'aviao' : 'trem',
-      trem,
-      aviao: { desc: 'Voo (~' + Math.round(km) + ' km)', h: [km / E.aviaoKmh, km / E.aviaoKmh], eur: E.aviaoEur.slice() },
-      aviso: trem ? '' : 'Sem trem viável neste trecho — somente avião.'
-    };
+    let terra = null;
+    TERRESTRES.forEach(m => { if (def[m] && (!terra || def[m].h[0] < def[terra].h[0])) terra = m; });
+    if (km >= 250 || !terra) {
+      const extra = (a.aeroExtraH || 0) + (b.aeroExtraH || 0), h = km / E.aviaoKmh + extra;
+      def.aviao = { desc: 'Voo (~' + Math.round(km) + ' km)' + (extra ? ' + traslado até o aeroporto' : ''), h: [h, h],
+        eur: km > 1500 ? [70, 180] : E.aviaoEur.slice() };
+    }
+    def.padrao = terra && (def[terra].h[0] <= 9 || !def.aviao) ? terra : 'aviao';
+    if (!terra) def.aviso = 'Sem ligação por terra viável neste trecho — somente avião.';
+    memoEst[chave] = def;
+    return def;
   }
 
   function viaInfo(via) {
@@ -238,10 +273,12 @@
       const v = listado || D.origem.voos.generico;
       est = !listado;
       def = { padrao: 'aviao', trem: null, aviao: { desc: v.desc, h: v.h, eur: null, total: true } };
-      if (ida && D.origem.viaIda && cid !== D.origem.viaIda) def.aviao.via = { cityId: D.origem.viaIda };
+      // a linha da ida passa pela cidade de conexão (via: null no voo = direto)
+      const via = v.via !== undefined ? v.via : D.origem.viaIda;
+      if (ida && via && cid !== via) def.aviao.via = { cityId: via };
     } else {
-      key = [from, to].sort().join('~');
-      def = D.legs.find(l => (l.a === from && l.b === to) || (l.a === to && l.b === from));
+      key = parKey(from, to);
+      def = legIdx[key];
       if (!def) { est = true; def = estimar(from, to); }
     }
     return { key, def, intl, est };
@@ -255,39 +292,46 @@
     const S = App.state;
     if (!isObj(S.legs[key])) S.legs[key] = {};
     const st = S.legs[key];
-    if (st.modo !== 'trem' && st.modo !== 'aviao') st.modo = def.padrao;
+    if (MODOS.indexOf(st.modo) < 0) st.modo = def.padrao;
     if (!isObj(st.real)) st.real = { v: '', cur: 'EUR' };
     if (typeof st.pernoite !== 'boolean') st.pernoite = true;   // pernoite é o recomendado
     if (!isObj(st.hospedagem)) st.hospedagem = clone(D.config.hospedagemPernoite);
 
     const leg = { key, from, to, intl, est, aviso: def.aviso || '', st, opts: {} };
-    ['trem', 'aviao'].forEach(m => {
+    MODOS.forEach(m => {
       const o = def[m];
       if (!o) return;
       const extra = (m === 'aviao' && !o.total) ? D.estimativa.aviaoExtraH : 0;
+      // "usar esta duração" (horários reais): substitui o tempo da tabela neste modo
+      const hReal = st.horas && num(st.horas[m]) > 0 ? num(st.horas[m]) : null;
       leg.opts[m] = {
         desc: o.desc || '',
-        h: o.h,
+        h: hReal ? [hReal, hReal] : o.h,
+        hReal: !!hReal,
         extra,
-        horas: (o.h[0] + o.h[o.h.length - 1]) / 2 + extra,     // porta a porta
+        horas: (hReal || (o.h[0] + o.h[o.h.length - 1]) / 2) + extra,     // porta a porta
         eur: o.eur || null,
         eurMid: o.eur ? (o.eur[0] + o.eur[1]) / 2 : 0,
         via: viaInfo(o.via),
         vias: (o.vias || (o.via ? [o.via] : [])).map(viaInfo),     // paradas no caminho (mapa)
-        pernoite: !!o.pernoite
+        pernoite: !!o.pernoite,
+        noturno: !!o.noturno
       };
     });
-    leg.modo = leg.opts[st.modo] ? st.modo : (leg.opts.trem ? 'trem' : 'aviao');
+    // melhor opção por terra (a mais rápida porta a porta) — usada no "cenário terrestre"
+    leg.terra = null;
+    TERRESTRES.forEach(m => { if (leg.opts[m] && (!leg.terra || leg.opts[m].horas < leg.opts[leg.terra].horas)) leg.terra = m; });
+    leg.modo = leg.opts[st.modo] ? st.modo : (leg.opts[def.padrao] ? def.padrao : (leg.terra || 'aviao'));
     return leg;
   }
 
-  // Custo e tempo de um trecho em um modo. cenario: 'trem' | 'aviao' | 'meu'.
+  // Custo e tempo de um trecho em um modo. cenario: 'terrestre' | 'aviao' | 'meu'.
   function legCost(leg, modo, cenario) {
     const o = leg.opts[modo], st = leg.st;
     const temReal = modo === leg.modo && st.real.v !== '' && st.real.v != null;
     const transporte = temReal ? App.toBRL(st.real.v, st.real.cur) : App.toBRL(o.eurMid, 'EUR');
     let pernoite = 0, noites = 0;
-    if (o.pernoite && (cenario === 'trem' || st.pernoite)) {
+    if (o.pernoite && (cenario === 'terrestre' || st.pernoite)) {
       noites = 1;
       pernoite = App.toBRL(st.hospedagem.v, st.hospedagem.cur);
     }
@@ -318,9 +362,12 @@
     const { key, def } = legDef(from, to);
     const st = App.state.legs[key];
     let modo = st && def[st.modo] ? st.modo : def.padrao;
-    if (!def[modo]) modo = def.trem ? 'trem' : 'aviao';
+    if (!def[modo]) modo = MODOS.find(m => def[m]);
     const o = def[modo];
-    if (crit === 'tempo') return (o.h[0] + o.h[o.h.length - 1]) / 2 + (modo === 'aviao' ? D.estimativa.aviaoExtraH : 0);
+    if (crit === 'tempo') {
+      const hReal = st && st.horas && num(st.horas[modo]) > 0 ? num(st.horas[modo]) : null;
+      return (hReal || (o.h[0] + o.h[o.h.length - 1]) / 2) + (modo === 'aviao' ? D.estimativa.aviaoExtraH : 0);
+    }
 
     const real = st && st.modo === modo && st.real && st.real.v !== '' && st.real.v != null;
     let brl = real ? App.toBRL(st.real.v, st.real.cur) : App.toBRL((o.eur[0] + o.eur[1]) / 2, 'EUR');
@@ -369,16 +416,81 @@
     return ordem.reverse();
   }
 
+  /* Acima de ~14 cidades o Held-Karp fica pesado (O(n²·2ⁿ)). A partir daí a rota é
+     APROXIMADA: parte da ordem atual e do "vizinho mais próximo" e melhora com
+     2-opt (inverte um pedaço do caminho) e Or-opt (muda de lugar blocos de 1 a 3
+     cidades) até não haver mais ganho. */
+  const HK_MAX = 13;     // máximo de cidades no "miolo" para a solução exata
+
+  function heuristica(mid, first, last, crit) {
+    const n = mid.length;
+    if (n <= 2) return heldKarp(mid, first, last, crit);
+    const nos = [first].concat(mid, [last]), N = nos.length;
+    const C = nos.map(a => nos.map(b => (a === b ? 0 : pairCost(a, b, crit))));
+    const custo = seq => { let t = 0; for (let i = 0; i < seq.length - 1; i++) t += C[seq[i]][seq[i + 1]]; return t; };
+
+    const melhorar = seq => {
+      let mudou = true, voltas = 0;
+      while (mudou && voltas++ < 60) {
+        mudou = false;
+        // 2-opt: inverte seq[i..j] (as pontas 0 e N-1 ficam fixas)
+        for (let i = 1; i < N - 2; i++) {
+          for (let j = i + 1; j < N - 1; j++) {
+            const d = C[seq[i - 1]][seq[j]] + C[seq[i]][seq[j + 1]] - C[seq[i - 1]][seq[i]] - C[seq[j]][seq[j + 1]];
+            if (d < -1e-9) { for (let a = i, b = j; a < b; a++, b--) { const t = seq[a]; seq[a] = seq[b]; seq[b] = t; } mudou = true; }
+          }
+        }
+        // Or-opt: move um bloco de 1 a 3 cidades para outra posição
+        for (let len = 1; len <= 3; len++) {
+          for (let i = 1; i + len <= N - 1; i++) {
+            const bloco = seq.slice(i, i + len), resto = seq.slice(0, i).concat(seq.slice(i + len));
+            const tirar = C[seq[i - 1]][seq[i]] + C[seq[i + len - 1]][seq[i + len]] - C[seq[i - 1]][seq[i + len]];
+            let melhorK = -1, melhorD = -1e-9;
+            for (let k = 1; k < resto.length; k++) {
+              if (k === i) continue;
+              const por = C[resto[k - 1]][bloco[0]] + C[bloco[len - 1]][resto[k]] - C[resto[k - 1]][resto[k]];
+              if (por - tirar < melhorD) { melhorD = por - tirar; melhorK = k; }
+            }
+            if (melhorK >= 0) { seq = resto.slice(0, melhorK).concat(bloco, resto.slice(melhorK)); mudou = true; }
+          }
+        }
+      }
+      return seq;
+    };
+
+    // ponto de partida 1: a ordem recebida · ponto de partida 2: vizinho mais próximo
+    const ini1 = nos.map((_, i) => i);
+    const livre = new Set(ini1.slice(1, N - 1)), ini2 = [0];
+    while (livre.size) {
+      const u = ini2[ini2.length - 1];
+      let v = -1;
+      livre.forEach(x => { if (v < 0 || C[u][x] < C[u][v]) v = x; });
+      ini2.push(v); livre.delete(v);
+    }
+    ini2.push(N - 1);
+    const r1 = melhorar(ini1), r2 = melhorar(ini2);
+    const r = custo(r2) < custo(r1) - 1e-9 ? r2 : r1;
+    return r.slice(1, N - 1).map(i => nos[i]);
+  }
+
+  // Exato até HK_MAX cidades no miolo; acima disso, heurística.
+  function melhorOrdem(mid, first, last, crit) {
+    return mid.length <= HK_MAX ? heldKarp(mid, first, last, crit) : heuristica(mid, first, last, crit);
+  }
+  App.rotaAproximada = n => (App.state.otim.fixarPontas ? n - 2 : n) > HK_MAX;
+
   // Ordem ótima para "ids". "base" define as pontas fixas (normalmente a ordem atual).
   App.optimize = function (ids, base) {
     const S = App.state, crit = S.otim.criterio;
     if (ids.length < 2) return ids.slice();
-    if (!S.otim.fixarPontas) return heldKarp(ids, 'vcp', 'vcp', crit);
+    if (!S.otim.fixarPontas) return melhorOrdem(ids, 'vcp', 'vcp', crit);
     base = (base || ids).filter(id => ids.indexOf(id) >= 0);
     if (base.length < 2) base = ids;
     if (ids.length <= 2) return base.concat(ids.filter(id => base.indexOf(id) < 0));
     const first = base[0], last = base[base.length - 1];
-    return [first].concat(heldKarp(ids.filter(id => id !== first && id !== last), first, last, crit), [last]);
+    // o miolo entra na ordem atual (ponto de partida da heurística)
+    const mid = base.filter(id => id !== first && id !== last).concat(ids.filter(id => base.indexOf(id) < 0));
+    return [first].concat(melhorOrdem(mid, first, last, crit), [last]);
   };
 
   /* --------------------------------------------------- cálculo geral (derivado) */
@@ -436,10 +548,11 @@
     });
 
     // cenários de transporte entre cidades
-    const cen = { trem: { brl: 0, h: 0, noites: 0 }, aviao: { brl: 0, h: 0, noites: 0 }, meu: { brl: 0, h: 0, noites: 0 } };
+    // terrestre = o melhor entre trem, ônibus e balsa em cada trecho (avião só onde não há opção por terra)
+    const cen = { terrestre: { brl: 0, h: 0, noites: 0 }, aviao: { brl: 0, h: 0, noites: 0 }, meu: { brl: 0, h: 0, noites: 0 } };
     legs.forEach(leg => {
-      ['trem', 'aviao', 'meu'].forEach(c => {
-        const modo = c === 'meu' ? leg.modo : (leg.opts[c] ? c : (c === 'trem' ? 'aviao' : 'trem'));
+      ['terrestre', 'aviao', 'meu'].forEach(c => {
+        const modo = c === 'meu' ? leg.modo : c === 'terrestre' ? (leg.terra || 'aviao') : (leg.opts.aviao ? 'aviao' : leg.terra);
         const r = legCost(leg, modo, c);
         cen[c].brl += r.transporte + r.pernoite;
         cen[c].h += r.horas;
@@ -779,6 +892,7 @@
     UI.renderAll();
     MapView.init();
     MapView.update();
+    MapView.fitRoute(true);       // abre enquadrando o roteiro atual ("Ver Europa inteira" mostra tudo)
     MapView.loadWorld();
     if (ganhoInicial) {
       save();
@@ -805,6 +919,6 @@
   }
 
   // Ganchos para a página de testes (tests/index.html), que carrega os scripts sem iniciar o app.
-  App._t = { defaults, merge, sanitize, compute, heldKarp, trainPath, pairCost, routeCost, legDef };
+  App._t = { defaults, merge, sanitize, compute, heldKarp, heuristica, trainPath, caminho, estimar, pairCost, routeCost, legDef };
   if (!window.VIAGEM_TESTE) init();
 })();

@@ -75,6 +75,63 @@
     ok(T.trainPath('paris', 'atenas') === null, 'Atenas não tem trem na tabela');
   });
 
+  teste('2-opt + Or-opt chega perto do ótimo (Held-Karp) em 10 cidades', () => {
+    novoEstado();
+    const ids = ['londres', 'madri', 'roma', 'praga', 'estocolmo', 'atenas', 'amsterda', 'viena', 'lisboa', 'copenhague', 'istambul', 'dublin'];
+    const first = ids[0], last = ids[11], mid = ids.slice(1, 11);
+    const custo = (ordem, crit) => {
+      const seq = [first].concat(ordem, [last]);
+      let t = 0;
+      for (let i = 0; i < seq.length - 1; i++) t += T.pairCost(seq[i], seq[i + 1], crit);
+      return t;
+    };
+    ['distancia', 'tempo'].forEach(crit => {
+      const exato = custo(T.heldKarp(mid, first, last, crit), crit);
+      // parte de uma ordem ruim de propósito (invertida e embaralhada)
+      const ruim = [mid[5], mid[0], mid[9], mid[2], mid[7], mid[4], mid[1], mid[8], mid[3], mid[6]];
+      const aprox = custo(T.heuristica(ruim, first, last, crit), crit);
+      ok(aprox >= exato - 1e-6, 'a heurística não pode ser melhor que o ótimo');
+      ok(aprox <= exato * 1.05, crit + ': heurística ' + aprox.toFixed(1) + ' × ótimo ' + exato.toFixed(1));
+    });
+  });
+
+  teste('Rota com 20 cidades usa a heurística e termina rápido', () => {
+    const S = novoEstado();
+    const ids = D.cities.slice(0, 20).map(c => c.id);
+    S.otim.fixarPontas = true;
+    ok(App.rotaAproximada(ids.length), 'deveria avisar "rota aproximada"');
+    const t0 = performance.now(), r = App.optimize(ids, ids);
+    ok(performance.now() - t0 < 1500, 'demorou demais');
+    igual(r.slice().sort(), ids.slice().sort(), 'mesmas cidades');
+    igual([r[0], r[19]], [ids[0], ids[19]], 'pontas fixas');
+    ok(T.routeCost(r, 'tempo') <= T.routeCost(ids, 'tempo') + 1e-6, 'não pode piorar a ordem recebida');
+  });
+
+  teste('Rede por terra: ônibus e balsa entram onde não há trem', () => {
+    novoEstado();
+    ok(T.trainPath('tirana', 'ohrid') === null, 'Albânia não tem trem');
+    const p = T.caminho('tirana', 'dubrovnik', App.TERRESTRES);
+    ok(p && p.modos.indexOf('onibus') >= 0, 'Tirana → Dubrovnik de ônibus');
+    const d = T.estimar('dublin', 'paris');
+    ok(d.balsa && !d.trem, 'Dublin → Paris por terra exige balsa');
+    igual(d.padrao, 'aviao', 'acima de 9h o padrão é avião');
+    ok(T.estimar('reykjavik', 'paris').aviso, 'Islândia: só avião');
+    const leg = T.legDef('helsinque', 'tallinn').def;
+    ok(leg.balsa && !leg.trem && !leg.aviao, 'Helsinque ↔ Tallinn: só balsa');
+  });
+
+  teste('Todas as cidades têm os campos novos e pelo menos 2 pontos', () => {
+    D.cities.forEach(c => {
+      ok(c.diariaHospedagem > 0 && c.diariaGastos > 0, c.id + ': diárias');
+      ok(c.moeda in D.cambio || c.moeda === 'BRL', c.id + ': moeda sem câmbio');
+      ok(D.fusos[c.paisIso], c.id + ': fuso horário');
+      ok(D.pois.filter(p => p.cityId === c.id).length >= 2, c.id + ': poucos pontos');
+    });
+    D.pois.forEach(p => ok(p.duracaoH > 0 && p.preco && p.preco.cur in D.simbolos && p.desc.length > 30, p.id));
+    igual(D.cities.filter(c => c.selecionada).map(c => c.id), ['londres', 'paris', 'cracovia'], 'roteiro padrão');
+    igual(D.pois.filter(p => p.selecionado && ['londres', 'paris', 'cracovia'].indexOf(p.cityId) < 0), [], 'nenhum ponto novo selecionado');
+  });
+
   /* ---------------------------------------------------------------- câmbio */
   grupo('Câmbio');
 

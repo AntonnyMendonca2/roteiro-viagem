@@ -3,8 +3,9 @@
 Planejador de viagem em forma de mapa interativo da Europa. Site estático (HTML + CSS +
 JavaScript puro): não tem build, backend nem npm.
 
-- Escolha cidades, pontos de interesse e meio de transporte (trem ou avião) de cada trecho.
-- Os totais, as datas e o comparativo trem × avião se recalculam na hora.
+- 68 destinos em toda a Europa, com cerca de 500 pontos de interesse.
+- Escolha cidades, pontos de interesse e meio de transporte (trem, ônibus, balsa ou avião) de cada trecho.
+- Os totais, as datas e o comparativo terrestre × avião se recalculam na hora.
 - Suas escolhas ficam salvas no navegador (localStorage) e podem ser exportadas/importadas em JSON.
 
 ## Como rodar no computador
@@ -54,7 +55,9 @@ O projeto usa só caminhos relativos, então funciona em qualquer subpasta. O ar
 ```
 index.html      página única
 css/style.css   estilo (monocromático + 1 cor de destaque)
-js/data.js      objeto DATA: cidades, pontos de interesse, trechos, câmbio, itens gerais
+js/data.js      objeto DATA: cidades e pontos do roteiro original, trechos, câmbio, itens gerais
+js/data-europa.js    Europa completa: demais cidades, moedas, trechos (trem/ônibus/balsa/avião)
+js/data-pontos-*.js  pontos de interesse das cidades novas (e reforço das antigas)
 js/net.js       chamadas a APIs externas: cache no navegador (com validade) e filas por serviço
 js/cambio.js    câmbio automático (Frankfurter/BCE), spread e mini-gráficos de 90 dias
 js/clima.js     clima típico nas datas, previsão, nascer/pôr do sol e lista "o que levar"
@@ -71,17 +74,21 @@ tests/          testes das funções puras (abra tests/index.html no navegador)
 
 **Cor de destaque:** em `css/style.css`, troque a variável `--accent` (logo no começo do arquivo).
 
-**Cidades, pontos e trechos:** tudo fica em `js/data.js`.
+**Cidades, pontos e trechos:** o roteiro original fica em `js/data.js`; a Europa completa, em
+`js/data-europa.js` (cidades e trechos, uma linha por item) e `js/data-pontos-*.js` (pontos).
 
 - `cities` — id, nome, país, lat/lon, moeda, título da Wikipedia (`wiki`), `selecionada`,
-  `noites`, `ordem`.
+  `noites`, `ordem`, `estacao` (estação principal), `diariaHospedagem` e `diariaGastos` (moeda
+  local), `aeroExtraH` (horas até o aeroporto mais próximo, para cidades sem aeroporto).
 - `pois` — pontos de interesse: `cityId`, lat/lon, `preco` (`v` é o número usado no orçamento,
   `label` é o texto exibido), `wiki`, `desc`, `site`, `tags`, `selecionado`, `avisos`.
   Bate-voltas têm `bateVolta: { desc, custo }`; `fechado: [2]` avisa quando a visita cai em
   uma terça (0 = domingo … 6 = sábado).
-- `legs` — trechos entre pares de cidades, com as opções `trem` e `aviao` (tempo em horas e
-  faixa de preço em euros) e o modo `padrao`. Pares que não estão na lista são estimados
-  automaticamente (parâmetros em `estimativa`) e aparecem marcados como "estimativa".
+- `legs` — trechos entre pares de cidades, com as opções `trem`, `onibus`, `balsa` e `aviao`
+  (tempo em horas e faixa de preço em euros) e o modo `padrao`. O seletor de cada trecho mostra
+  só os meios disponíveis. Pares que não estão na lista são estimados: por terra, pelo caminho
+  mais rápido na rede de trechos da tabela (Dijkstra); de avião, pela distância. Aparecem
+  marcados como "estimativa".
 - `config`, `cambio`, `gerais` — data de saída, orçamento, câmbio e itens gerais padrão.
 
 Depois de mudar valores padrão no `data.js`, use **Dados → Restaurar padrão** no app para
@@ -100,7 +107,14 @@ descartar o que estava salvo no navegador.
   Critérios: menor tempo (porta a porta, com o modo trem/avião de cada trecho), menor custo ou
   menor distância. Por padrão a 1ª e a última cidade ficam fixas (chegada e saída dos voos
   internacionais). Reordenar à mão desliga a otimização automática; o botão "Otimizar agora"
-  mostra quanto a melhor ordem economiza.
+  mostra quanto a melhor ordem economiza. Até 14 cidades a solução é exata; acima disso o app usa
+  uma heurística (2-opt + Or-opt) e avisa "rota aproximada".
+- **Europa completa:** "Ver Europa inteira" enquadra todos os destinos, da Islândia a Chipre; ao
+  abrir, o mapa enquadra o seu roteiro ("Ver meu roteiro"). No zoom da Europa aparecem os nomes
+  das cidades do roteiro e de algumas grandes; as demais são pontos (o nome surge no hover ou ao
+  aproximar). Rússia e Bielorrússia, como a Ucrânia, são somente informativas. Em "Meu roteiro"
+  há uma busca para adicionar cidades, agrupadas por país. Moedas sem cotação automática (RSD,
+  ALL, MKD, MDL) ficam manuais; a BAM é derivada do euro (paridade fixa).
 - **Passagens aéreas:** clique em um país no mapa (ou veja o painel da cidade) para abrir buscas
   já preenchidas no Google Flights, Skyscanner e Kayak — da cidade anterior do roteiro até a
   cidade daquele país, na data de chegada (e a volta para Campinas, na última cidade). Não usa

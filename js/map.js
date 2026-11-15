@@ -23,8 +23,9 @@
   const TILE_URL = (z, x, y) => 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/' + z + '/' + y + '/' + x;
   const TILE_MAX_Z = 16;       // nível máximo disponível; acima disso as imagens são ampliadas
   const TILE_FADE = [2.5, 6];  // faixa de zoom (k) em que o mapa de ruas substitui o de países
-  // Pontos que definem o enquadramento inicial ("Europa inteira").
-  const FRAME = { type: 'MultiPoint', coordinates: [[-16, 36], [-16, 58], [36, 36.5], [36, 58], [10, 59.5], [10, 35.2]] };
+  // Pontos que definem o enquadramento de "Ver Europa inteira": da Islândia a Chipre, da Lapônia a Malta.
+  const FRAME = { type: 'MultiPoint', coordinates: [[-24.5, 34.2], [-24.5, 67.2], [35.5, 34.2], [35.5, 67.2]] };
+  const VCP_LL = [-20.5, 36.8];   // Viracopos fica fora do mapa: marcador no Atlântico, a sudoeste da Europa
   const REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const POI_ZOOM = 4;          // a partir deste zoom os pontos de interesse aparecem
   const PX_KM_MAX = 90;        // zoom máximo ao enquadrar uma cidade (px por km)
@@ -38,6 +39,7 @@
   let features = null, ready = false, routeSig = null;
   let cityPts = [], poiPts = [], infoPts = [], vcp = { id: 'vcp', x: 0, y: 0 }, pxKm = 1;
   let mover = null, drawTimer = null, cardTimer = null, lastPointer = 'mouse', pickCb = null, fotosOn = true;
+  let poiSig = null, zoomRaf = 0;
   let card, tip;
 
   const esc = s => window.UI.esc(s);
@@ -85,13 +87,14 @@
     cityPts = D.cities.map(c => Object.assign({ id: c.id, c }, P(c)));
     poiPts = D.pois.map(p => Object.assign({ id: p.id, p }, P(p)));
     infoPts = D.info.map(i => Object.assign({ id: i.id, i }, P(i)));
-    // Viracopos fica fora do recorte: marcador fixo no canto inferior esquerdo.
-    vcp = { id: 'vcp', x: r.x0 + (mobile ? 34 : 70), y: r.y1 - (mobile ? 26 : 44) };
+    const pv = projection(VCP_LL);
+    vcp = { id: 'vcp', x: pv[0], y: pv[1] };
 
     const a = projection([10, 50]), b = projection([10, 51]);
     pxKm = Math.hypot(a[0] - b[0], a[1] - b[1]) / 111.2;
 
     drawCountries();
+    poiSig = null;
     drawMarkers();
     routeSig = null;
     tilesZ = -1; tilesCur = []; lingering = [];
@@ -187,14 +190,19 @@
         hideCard();
         window.UI.showCountryCard(+d.id, (d.properties && d.properties.name) || '', e.clientX, e.clientY);
       });
-    L.hatch.selectAll('path').data(features.filter(f => +f.id === D.infoArea.paisIso)).join('path').attr('class', 'hatch').attr('d', geoPath);
+    const info = new Set((D.infoAreas || [D.infoArea]).map(a => a.paisIso));
+    L.hatch.selectAll('path').data(features.filter(f => info.has(+f.id))).join('path').attr('class', 'hatch').attr('d', geoPath);
     countryState();
   }
 
   // Países com alguma cidade selecionada ficam em cinza claro.
   function countryState() {
     const S = A().state, ativos = new Set();
-    D.cities.forEach(c => { if (S.cities[c.id].sel) ativos.add(c.paisIso); });
+    D.cities.forEach(c => {
+      if (!S.cities[c.id].sel) return;
+      ativos.add(c.paisIso);
+      (c.paisesExtra || []).forEach(p => ativos.add(p));       // ex.: Vaticano junto com Roma
+    });
     L.countries.selectAll('path').classed('active', d => ativos.has(+d.id));
   }
 
@@ -209,6 +217,7 @@
     return d3.json(WORLD_URL).then(topo => {
       const all = topojson.feature(topo, topo.objects.countries).features;
       // só o entorno da Europa (a projeção cônica não serve para o mundo todo)
+      all.forEach(f => { if (f.id === undefined && f.properties && f.properties.name === 'Kosovo') f.id = 383; });   // o atlas não traz código para o Kosovo
       features = all.filter(f => {
         const c = d3.geoCentroid(f);
         return (c[0] > -60 && c[0] < 95 && c[1] > 8 && c[1] < 85) || +f.id === 643;
@@ -256,11 +265,6 @@
   };
 
   function drawMarkers() {
-    // bate-voltas: linhas tracejadas finas da cidade até o ponto
-    L.trips.selectAll('path').data(poiPts.filter(d => d.p.bateVolta), d => d.id).join('path')
-      .attr('class', 'trip')
-      .attr('d', d => { const c = cityPt(d.p.cityId); return 'M' + c.x + ',' + c.y + 'L' + d.x + ',' + d.y; });
-
     // cidades (+ Viracopos)
     const cities = L.cities.selectAll('g.city').data(cityPts, d => d.id).join(enter => {
       const g = enter.append('g').attr('class', 'mk city');
@@ -274,6 +278,7 @@
     });
     cities.each(function (d) {
       const o = LBL[d.c.rotulo] || LBL.e, g = d3.select(this);
+      this.__lbl = d.c.rotulo || 'e';
       g.select('.lbl').attr('x', o.x).attr('y', o.y).attr('text-anchor', o.a).text(d.c.nome);
       g.select('.sub').attr('x', o.sx).attr('y', o.sy).attr('text-anchor', o.a);
     });
@@ -290,8 +295,42 @@
     });
     place(v);
 
-    // pontos de interesse
-    const pois = L.pois.selectAll('g.poi').data(poiPts, d => d.id).join(enter => {
+    drawPois();
+
+    // área informativa (Ucrânia): ícones de alerta
+    const info = L.info.selectAll('g.info').data(infoPts, d => d.id).join(enter => {
+      const g = enter.append('g').attr('class', 'mk info');
+      g.append('path').attr('class', 'tri').attr('d', 'M0,-9 L9,7 L-9,7 Z');
+      g.append('text').attr('y', 5).attr('text-anchor', 'middle').text('!');
+      g.append('circle').attr('class', 'hit').attr('r', 14);
+      bindPoint(g, 'info');
+      return g;
+    });
+    place(info);
+  }
+
+  /* Com centenas de pontos de interesse, só entram no desenho os das cidades que estão
+     na tela (e só a partir do zoom em que os pontos aparecem). Assim o mapa continua
+     fluido: no zoom da Europa não existe nenhum marcador de ponto no SVG. */
+  function cidadesVisiveis() {
+    if (T.k < POI_ZOOM * 0.8) return [];
+    const W = window.innerWidth, H = window.innerHeight, m = Math.max(260, 130 * pxKm * T.k);   // margem: bate-voltas ficam a até ~130 km
+    return cityPts.filter(c => { const x = T.x + c.x * T.k, y = T.y + c.y * T.k; return x > -m && x < W + m && y > -m && y < H + m; }).map(c => c.id);
+  }
+
+  // Devolve true se o conjunto de pontos desenhados mudou.
+  function drawPois() {
+    const vis = cidadesVisiveis(), sig = vis.join();
+    if (sig === poiSig) return false;
+    poiSig = sig;
+    const set = new Set(vis), lista = poiPts.filter(d => set.has(d.p.cityId));
+
+    // bate-voltas: linhas tracejadas finas da cidade até o ponto
+    L.trips.selectAll('path').data(lista.filter(d => d.p.bateVolta), d => d.id).join('path')
+      .attr('class', 'trip')
+      .attr('d', d => { const c = cityPt(d.p.cityId); return 'M' + c.x + ',' + c.y + 'L' + d.x + ',' + d.y; });
+
+    const pois = L.pois.selectAll('g.poi').data(lista, d => d.id).join(enter => {
       const g = enter.append('g').attr('class', 'mk poi');
       g.append('circle').attr('class', 'pulse').attr('r', 5);
       g.append('circle').attr('class', 'dot').attr('r', 5);
@@ -310,17 +349,50 @@
       return g;
     });
     place(pois);
+    return true;
+  }
 
-    // área informativa (Ucrânia): ícones de alerta
-    const info = L.info.selectAll('g.info').data(infoPts, d => d.id).join(enter => {
-      const g = enter.append('g').attr('class', 'mk info');
-      g.append('path').attr('class', 'tri').attr('d', 'M0,-9 L9,7 L-9,7 Z');
-      g.append('text').attr('y', 5).attr('text-anchor', 'middle').text('!');
-      g.append('circle').attr('class', 'hit').attr('r', 14);
-      bindPoint(g, 'info');
-      return g;
+  /* Rótulos das cidades sem sobreposição. No zoom da Europa aparecem só os nomes das
+     cidades do roteiro e de algumas grandes; as demais são pontos (o nome surge no
+     hover ou ao aproximar). Detecção simples de colisão entre retângulos, por
+     prioridade: roteiro → cidade aberta → grandes → demais. */
+  function labelLayout() {
+    const App = A(), S = App.state, f = App.focus;
+    const W = window.innerWidth, H = window.innerHeight, perto = T.k >= 2.3;
+    const caixas = [];
+    const livre = b => !caixas.some(c => c.id !== b.id && b.x0 < c.x1 && b.x1 > c.x0 && b.y0 < c.y1 && b.y1 > c.y0);
+    const itens = cityPts.map(d => {
+      const sel = S.cities[d.id].sel, foco = !!f && f.type === 'city' && f.id === d.id;
+      return { d, sx: T.x + d.x * T.k, sy: T.y + d.y * T.k, pri: sel ? 0 : foco ? 1 : d.c.grande ? 2 : 3, sel };
     });
-    place(info);
+    // os pontos das cidades são obstáculos para os rótulos das outras
+    itens.forEach(i => caixas.push({ id: i.d.id, x0: i.sx - 6, x1: i.sx + 6, y0: i.sy - 6, y1: i.sy + 6 }));
+    const pos = {};
+    itens.slice().sort((a, b) => a.pri - b.pri).forEach(i => {
+      const fora = i.sx < -40 || i.sx > W + 40 || i.sy < -40 || i.sy > H + 40;
+      if (fora || (i.pri === 3 && !perto)) { pos[i.d.id] = null; return; }
+      const larg = i.d.c.nome.length * 6.7 + 6, alt = i.sel ? 28 : 15;
+      const ordem = [i.d.c.rotulo || 'e', 'e', 'w', 'n', 's'].filter((v, k, a) => a.indexOf(v) === k);
+      let escolhido = null;
+      for (const k of ordem) {
+        const o = LBL[k];
+        const x0 = o.a === 'start' ? i.sx + o.x : o.a === 'end' ? i.sx + o.x - larg : i.sx - larg / 2;
+        const y0 = i.sy + o.y - 11;
+        const b = { id: i.d.id, x0, x1: x0 + larg, y0, y1: y0 + alt };
+        if (livre(b)) { escolhido = k; caixas.push(b); break; }
+      }
+      if (!escolhido && i.pri === 0) escolhido = ordem[0];          // cidade do roteiro sempre mostra o nome
+      pos[i.d.id] = escolhido;
+    });
+    L.cities.selectAll('g.city').each(function (d) {
+      const k = pos[d.id], g = d3.select(this);
+      g.classed('nolbl', !k).classed('menor', !S.cities[d.id].sel && !perto);
+      if (!k || this.__lbl === k) return;
+      this.__lbl = k;
+      const o = LBL[k];
+      g.select('.lbl').attr('x', o.x).attr('y', o.y).attr('text-anchor', o.a);
+      g.select('.sub').attr('x', o.sx).attr('y', o.sy).attr('text-anchor', o.a);
+    });
   }
 
   // Hover (card), clique (ripple + painel) e toque em qualquer marcador.
@@ -408,7 +480,7 @@
   // da viagem; trem: curva suave para a direita (assim os dois não se sobrepõem).
   function arc(a, b, modo) {
     const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
-    const k = modo === 'aviao' ? 0.2 : -0.07;
+    const k = modo === 'aviao' ? 0.2 : modo === 'balsa' ? -0.12 : -0.07;
     const cx = (a.x + b.x) / 2 + (dy / len) * len * k, cy = (a.y + b.y) / 2 + (-dx / len) * len * k;
     return {
       d: 'M' + a.x + ',' + a.y + 'Q' + cx + ',' + cy + ' ' + b.x + ',' + b.y,
@@ -453,8 +525,8 @@
     };
 
     legs.forEach(leg => {                          // alternativa (modo não escolhido) por baixo
-      const outro = leg.modo === 'trem' ? 'aviao' : 'trem';
-      if (leg.opts[outro]) legPaths(leg, outro, false);
+      const outro = leg.modo === 'aviao' ? leg.terra : 'aviao';     // avião × melhor opção por terra
+      if (outro && leg.opts[outro]) legPaths(leg, outro, false);
     });
     legs.forEach(leg => legPaths(leg, leg.modo, true));
 
@@ -547,6 +619,8 @@
     const f = App.focus;
     const aberta = !f ? null : f.type === 'city' ? f.id : f.type === 'poi' ? App.poi(f.id).cityId : null;
 
+    drawPois();
+    labelLayout();
     const pois = L.pois.selectAll('g.poi')
       .classed('sel', d => App.poiActive(d.id))
       .classed('off', d => !!tag && d.p.tags.indexOf(tag) < 0)
@@ -611,9 +685,16 @@
     node.classList.toggle('lvl-city', T.k >= POI_ZOOM);
     node.classList.toggle('lvl-street', T.k * pxKm >= 140);    // nomes dos pontos a partir de ~140 px/km
     document.body.classList.toggle('zoomed', T.k > 1.03 || Math.abs(T.x) > 3 || Math.abs(T.y) > 3);
+    node.classList.toggle('lvl-europa', T.k < 2.3);
     hideCard();
     hideTip();
     if (e.sourceEvent) window.UI.hideCountryCard();   // arrastar/rolar o mapa fecha o card do país
+    // rótulos e pontos visíveis: no máximo uma vez por quadro
+    if (!zoomRaf) zoomRaf = requestAnimationFrame(() => {
+      zoomRaf = 0;
+      if (!A().calc) return;
+      if (drawPois()) M.update(); else labelLayout();
+    });
   }
 
   function go(k, cx, cy, dur) {
@@ -648,6 +729,19 @@
     M.update();
   };
 
+  // Enquadra o roteiro atual (cidades selecionadas + Viracopos). Sem roteiro, mostra a Europa inteira.
+  M.fitRoute = function (semAnimar) {
+    const ids = A().calc.route;
+    if (!ids.length) { M.reset(); return; }
+    const r = A().viewRect(), pad = A().isMobile() ? 30 : 80, pts = ids.map(cityPt).concat([vcp]);
+    const x0 = d3.min(pts, d => d.x), x1 = d3.max(pts, d => d.x), y0 = d3.min(pts, d => d.y), y1 = d3.max(pts, d => d.y);
+    const k = Math.max(1, Math.min(6, (r.x1 - r.x0 - 2 * pad) / Math.max(x1 - x0, 1), (r.y1 - r.y0 - 2 * pad) / Math.max(y1 - y0, 1)));
+    const t = d3.zoomIdentity.translate((r.x0 + r.x1) / 2 - k * (x0 + x1) / 2, (r.y0 + r.y1) / 2 - k * (y0 + y1) / 2).scale(k);
+    if (semAnimar || REDUCED) svg.call(zoom.transform, t);
+    else svg.transition().duration(800).ease(d3.easeCubicInOut).call(zoom.transform, t);
+    M.update();
+  };
+
   // Volta ao zoom inicial (Europa inteira).
   M.reset = function () {
     svg.transition().duration(REDUCED ? 0 : 800).ease(d3.easeCubicInOut).call(zoom.transform, d3.zoomIdentity);
@@ -661,6 +755,6 @@
     svg.call(zoom.transform, d3.zoomIdentity);
     M.update();
     const f = A().focus;
-    if (f && f.type === 'city') M.focusCity(f.id);
+    if (f && f.type === 'city') M.focusCity(f.id); else M.fitRoute(true);
   };
 })();

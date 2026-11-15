@@ -120,6 +120,11 @@ small { font-weight: 400; color: var(--muted); }
 .city.sel .pulse { animation: pulse 2.6s ease-out infinite; }
 .city.sel .lbl { fill: #fff; }
 .city.dim { opacity: .35; }
+/* muitos destinos: no zoom da Europa, cidades fora do roteiro são pontos menores e sem nome */
+.city.nolbl .lbl, .city.nolbl .sub { display: none; }
+.city.nolbl:hover .lbl { display: block; fill: #fff; }
+.city.menor .dot { r: 3.6px; stroke-width: 1px; }
+.city.menor .lbl { font-size: 10.5px; }
 .city:hover .dot { opacity: 1; }
 .city.focus .lbl { fill: var(--accent); }
 /* com zoom na cidade, o marcador dela vira um anel para não cobrir os pontos */
@@ -270,6 +275,11 @@ small { font-weight: 400; color: var(--muted); }
 .chip:hover { color: #fff; border-color: #555; }
 .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .chip.add { border-style: dashed; }
+.chip[hidden] { display: none; }
+#f-busca-cidade { margin-bottom: 8px; }
+.add-pais { display: grid; grid-template-columns: 96px 1fr; gap: 8px; align-items: start; padding: 5px 0; border-top: 1px solid var(--line); }
+.add-pais[hidden] { display: none; }
+.add-pais > span { font-size: 11.5px; color: var(--muted); padding-top: 5px; }
 
 .btn {
   border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
@@ -285,7 +295,8 @@ small { font-weight: 400; color: var(--muted); }
 .btn.danger:hover { border-color: #888; }
 .btn-col { display: flex; flex-direction: column; gap: 8px; }
 
-#btn-home { flex: none; margin-left: auto; opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .25s, transform .25s, visibility .25s; }
+.top-btns { display: flex; gap: 6px; flex: none; margin-left: auto; }
+#btn-home { opacity: 0; visibility: hidden; transform: translateY(-4px); transition: opacity .25s, transform .25s, visibility .25s; }
 .zoomed #btn-home { opacity: 1; visibility: visible; transform: none; }
 
 /* ================================================================== PAINEL */
@@ -425,7 +436,7 @@ details.more > summary:hover { color: #fff; }
 .leg-head { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
 .leg-title { font-size: 12px; color: #bdbdbd; font-weight: 500; }
 .est { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; border: 1px solid #4a4a4a; color: #a9a9a9; border-radius: 6px; padding: 1px 6px; }
-.seg { display: inline-flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 3px; }
 .seg button {
   border: 0; background: none; color: #a8a8a8; padding: 5px 12px; border-radius: 7px;
   font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; transition: background .2s, color .2s;
