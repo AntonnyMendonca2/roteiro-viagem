@@ -68,6 +68,7 @@ js/descobrir.js "Descobrir por perto" e pontos de interesse criados pelo usuári
 js/diaadia.js   roteiro dia a dia automático de cada cidade
 js/assistente.js assistente "Tenho X dias e R$ Y: o que cabe?" (otimizador em Web Worker)
 js/cenarios.js   cenários A/B/C: versões do roteiro e comparação lado a lado
+js/compartilhar.js link de compartilhamento (roteiro dentro do link), QR code, mesclar
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -198,6 +199,17 @@ O botão **Cenário** (barra superior) guarda várias versões do roteiro — po
 - **Comparar…** abre o painel lado a lado (o cenário ativo + até 2): total, dias, noites, horas de deslocamento, cidades, pontos, trechos por meio de transporte e interesse, com a diferença para o ativo. As cidades que só existem em um cenário aparecem em destaque. Com **Comparar no mapa**, as rotas dos outros cenários aparecem em cinza tracejado.
 - No **Assistente**, cada alternativa tem o botão **Salvar como cenário**.
 - Roteiros salvos antes desta versão viram o "Cenário A" sozinhos. **Exportar/Importar** levam todos os cenários.
+
+### Compartilhar por link
+
+O botão **Compartilhar** (barra superior e aba **Dados**) gera um link com o roteiro inteiro **dentro dele** — não há servidor:
+
+- O link leva só o que difere do roteiro padrão, em JSON compactado (`CompressionStream('deflate-raw')`) e codificado em base64url, no *hash*: `…/#r=1z<dados>`. O `1` é a versão do formato; `z` = compactado, `j` = JSON puro (usado quando o navegador não tem `CompressionStream`). Como fica no hash, nada vai para o servidor.
+- A janela mostra o link, o tamanho, **Copiar link**, **Enviar…** (no celular, pelo compartilhamento do sistema) e um **QR code** (biblioteca `qrcode-generator@1.4.4`, carregada só nessa hora).
+- **Privacidade:** o link inclui hospedagens marcadas e todos os valores. Marque **Não incluir hospedagens e valores** para mandar só o roteiro (cidades, noites, pontos, trechos).
+- Vai só o cenário ativo; marque **Incluir todos os cenários** para mandar todos.
+- Quem abre o link vê a faixa **"Você está vendo um roteiro compartilhado"**, com: **Só visualizar** (modo leitura — nada é salvo no navegador), **Usar este roteiro** (substitui o seu, com confirmação e *Desfazer*), **Mesclar** (acrescenta ao seu as cidades e os pontos que você não tem, sem trazer valores) e **Voltar ao meu**.
+- Funciona também em `file://`, mas aí o link só abre no mesmo computador.
 
 ## APIs externas
 

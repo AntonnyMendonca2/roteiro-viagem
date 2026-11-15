@@ -148,6 +148,7 @@
   }
 
   function save() {
+    if (App.somenteLeitura) return;   // vendo um roteiro compartilhado: nada é salvo
     try { window.localStorage.setItem(LS_KEY, JSON.stringify(App.state)); } catch (e) { /* app funciona sem salvar */ }
   }
 
@@ -958,6 +959,7 @@
       UI.toast('Arquivo inválido: não parece um roteiro exportado por este app.');
       return false;
     }
+    window.Compartilhar.encerrar();
     App.state = novo;
     App.focus = null;
     UI.hideDetail();
@@ -971,6 +973,7 @@
   App.reset = function () {
     if (!window.confirm('Restaurar o roteiro padrão? Todas as suas escolhas, valores e cenários serão apagados.')) return;
     try { window.localStorage.removeItem(LS_KEY); } catch (e) { /* ok */ }
+    window.Compartilhar.encerrar();
     App.state = sanitize(defaults());
     App.focus = null;
     UI.hideDetail();
@@ -993,6 +996,7 @@
     window.DiaADia.bind();
     window.Assistente.bind();
     window.Cenarios.bind();
+    window.Compartilhar.bind();
     UI.renderAll();
     window.Cenarios.render();
     MapView.init();
@@ -1007,6 +1011,7 @@
     window.Clima.carregar();
     window.Trilhos.carregar();
     window.Cambio.init();   // busca as cotações (modo automático) e o histórico de 90 dias
+    window.Compartilhar.iniciar();   // link com #r=...: mostra o roteiro compartilhado em modo leitura
 
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape') return;

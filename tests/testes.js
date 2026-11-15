@@ -588,6 +588,90 @@
     ok(App.lerPacote('{"x":1}') === null && App.lerPacote('não é json') === null, 'arquivo inválido → null');
   });
 
+  /* ------------------------------------------------------- link de compartilhamento */
+  grupo('Link de compartilhamento');
+  const Comp = window.Compartilhar;
+
+  // roteiro "mexido": cidades, noites, valores, hospedagem, trecho, ponto do usuário e um 2º cenário
+  function estadoMexido() {
+    const S = novoEstado();
+    S.dataSaida = '2027-05-02';
+    S.cities.roma.sel = true; S.cities.roma.ordem = 60; S.cities.roma.noites = 4;
+    S.cities.roma.custos.hospedagem = { v: 480, cur: 'EUR' };
+    S.cities.londres.hosp = { nome: 'Hotel “Çà et là” – Ünïcode', lat: 51.51, lon: -0.12 };
+    S.legs['paris~roma'] = { modo: 'aviao', real: { v: 310, cur: 'EUR' } };
+    S.customPois.push({ id: 'u-teste1', cityId: 'roma', nome: 'Sorveteria da praça', lat: 41.9, lon: 12.5, preco: { v: 5, cur: 'EUR' }, tags: [], duracaoH: 1 });
+    T.sanitize(S);
+    S.pois['u-teste1'].sel = true;
+    const b = Cen.criar('Só Leste', Cen.retrato(S));
+    b.dados.cities.cracovia = { noites: 7 };
+    return S;
+  }
+
+  teste('Compactar → descompactar: o estado volta igual (todos os cenários)', async () => {
+    const S = estadoMexido();
+    const cod = await Comp.codificar(Comp.montar(S, { todos: true }));
+    ok(/^1[zj][A-Za-z0-9_-]+$/.test(cod), 'formato "versão + modo + base64url"');
+    const N = Comp.estadoDe(await Comp.decodificar(cod));
+    const sem = st => { const o = JSON.parse(JSON.stringify(st)); delete o.cambioInfo; delete o.ocultos; return o; };
+    igual(sem(N), sem(S));
+  });
+
+  teste('Sem CompressionStream: o link vai em JSON puro e volta igual', async () => {
+    const S = estadoMexido(), obj = Comp.montar(S, {});
+    const puro = await Comp.codificar(obj, { semCompactar: true });
+    ok(puro.charAt(1) === 'j', 'modo "j"');
+    igual(await Comp.decodificar(puro), obj);
+    const z = await Comp.codificar(obj);
+    if (z.charAt(1) === 'z') ok(z.length < puro.length, 'o compactado é menor');
+  });
+
+  teste('Só o que difere do padrão entra no link; sem "todos", vai só o cenário ativo', () => {
+    const S = estadoMexido(), obj = Comp.montar(S, {});
+    igual(Object.keys(obj.cities).sort(), ['londres', 'roma']);
+    ok(obj.cenarios.length === 1 && obj.cenarios[0].id === S.cenarioAtivo, 'só o cenário ativo');
+    ok(obj.cambio === undefined && obj.cambioInfo === undefined, 'câmbio automático não vai no link');
+    ok(Comp.montar(S, { todos: true }).cenarios.length === 2, 'com "todos", vão os dois');
+    igual(Comp.montar(novoEstado(), {}).cities, undefined, 'roteiro padrão → nada de cidades no link');
+  });
+
+  teste('"Não incluir hospedagens e valores" tira hospedagens, gastos e valores reais', () => {
+    const S = estadoMexido();
+    S.gerais[Object.keys(S.gerais)[0]].v = 9999; S.orcamento = 22222;
+    const txt = JSON.stringify(Comp.montar(S, { privado: true, todos: true }));
+    ok(txt.indexOf('Hotel') < 0 && txt.indexOf('480') < 0 && txt.indexOf('310') < 0 && txt.indexOf('9999') < 0 && txt.indexOf('22222') < 0, 'nada de valores: ' + txt.slice(0, 200));
+    const N = Comp.estadoDe(JSON.parse(txt));
+    ok(N.cities.roma.sel && N.cities.roma.noites === 4 && N.legs['paris~roma'].modo === 'aviao', 'o roteiro em si continua');
+    ok(N.cities.londres.hosp.nome === '' && N.cities.roma.custos.hospedagem.v === '', 'hospedagem e gastos em branco');
+  });
+
+  teste('Link inválido ou de versão mais nova é recusado com mensagem', async () => {
+    for (const ruim of ['', 'abc', '1z!!!', '1jAAAA', '9z' + 'A'.repeat(8)]) {
+      let erro = null;
+      try { await Comp.decodificar(ruim); } catch (e) { erro = e; }
+      ok(erro && erro.message, 'devia recusar: "' + ruim + '"');
+    }
+  });
+
+  teste('Mesclar: adiciona só as cidades e os pontos que eu não tenho', () => {
+    const O = JSON.parse(JSON.stringify(estadoMexido()));      // roteiro de quem compartilhou (tem Roma)
+    const S = novoEstado();
+    const pLondres = D.pois.find(p => p.cityId === 'londres' && !S.pois[p.id].sel);
+    O.pois[pLondres.id].sel = true;
+    S.cities.londres.noites = 9;
+    const antes = D.cities.filter(c => S.cities[c.id].sel).length;
+    const r = Comp.mesclar(S, O);
+    ok(r.cidades === 1 && S.cities.roma.sel && S.cities.roma.noites === 4, 'Roma entrou com as noites do link');
+    ok(D.cities.filter(c => S.cities[c.id].sel).length === antes + 1, 'nenhuma cidade saiu');
+    ok(S.cities.londres.noites === 9, 'o que eu já tinha não muda');
+    const rota = App.route();
+    ok(rota.indexOf('roma') === rota.length - 2, 'entra antes da minha última cidade: ' + rota.join());
+    ok(S.pois[pLondres.id].sel, 'ponto novo em cidade que eu já tinha');
+    ok(S.customPois.some(p => p.id === 'u-teste1') && S.pois['u-teste1'].sel, 'ponto criado pela outra pessoa');
+    ok(S.cities.roma.custos.hospedagem.v === '', 'valores da outra pessoa não vêm na mescla');
+    igual(Comp.mesclar(S, O), { cidades: 0, pontos: 0 }, 'mesclar de novo não muda nada');
+  });
+
   /* ------------------------------------------------------------ utilitários */
   grupo('Utilitários');
 

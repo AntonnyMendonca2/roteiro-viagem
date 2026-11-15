@@ -374,6 +374,37 @@ li.on .cm-go b { background: var(--accent); border-color: var(--accent); color: 
 .cb-cities li.only { color: var(--accent); font-weight: 600; }
 .cb-cities li.vazio { list-style: none; margin-left: -18px; color: var(--muted); }
 
+/* link de compartilhamento: botão, janela e faixa do roteiro recebido */
+#btn-share { display: inline-flex; align-items: center; gap: 6px; }
+#sharebox {
+  position: fixed; z-index: 33; top: 56px; left: 14px; width: min(430px, calc(100vw - var(--sidebar-w) - 28px));
+  max-height: calc(100vh - 70px); overflow-y: auto;
+  background: var(--panel); border: 1px solid #343434; border-radius: var(--radius); box-shadow: var(--shadow);
+  padding: 12px 14px; display: none;
+}
+#sharebox.show { display: block; animation: rise .22s ease; }
+.sh-aviso { font-size: 12.5px; color: #d6d6d6; border-left: 2px solid var(--accent); padding-left: 9px; margin: 8px 0 4px; }
+.sh-link { width: 100%; margin-top: 10px; font-size: 12px; color: #c9c9c9; }
+#sh-tam { margin-top: 6px; font-size: 11.5px; }
+.sh-btns { display: flex; gap: 6px; margin-top: 10px; }
+.sh-qr { margin-top: 12px; display: flex; align-items: center; gap: 12px; }
+.sh-qr .muted { margin: 0; font-size: 11.5px; }
+.sh-qr-img { flex: none; width: 148px; height: 148px; background: #fff; border-radius: 10px; overflow: hidden; }
+.sh-qr-img svg { display: block; width: 100%; height: 100%; }
+#sharebar {
+  position: fixed; z-index: 30; top: 52px; left: 14px; max-width: calc(100vw - var(--sidebar-w) - 28px);
+  display: none; align-items: center; gap: 12px 16px; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow); padding: 10px 12px;
+}
+#sharebar.show { display: flex; animation: rise .22s ease; }
+#sharebar.mini { padding: 0; border-radius: 999px; }
+.sb-txt { display: flex; flex-direction: column; font-size: 13px; line-height: 1.3; }
+.sb-txt span { font-size: 11.5px; color: var(--muted); }
+.sb-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.sb-mini { border: 0; background: none; color: var(--text); font-size: 12px; padding: 6px 12px; border-radius: 999px; }
+.sb-mini b { color: var(--accent); font-weight: 600; }
+.vendo-link #daychips { top: 92px; }
+
 /* chips do dia a dia sobre o mapa */
 #daychips { position: fixed; top: 52px; left: 14px; right: calc(var(--sidebar-w) + 14px); z-index: 5; align-items: center; pointer-events: none; }
 #daychips:empty { display: none; }
@@ -905,6 +936,10 @@ input[type=text]:focus { outline: none; border-color: var(--accent); }
   #cenbox { top: 100px; left: 10px; right: 10px; width: auto; max-height: calc(100vh - 100px - var(--peek) - 12px); }
   #btn-cen { max-width: 120px; }
   #btn-cen small { display: none; }
+  #btn-share span { display: none; }
+  #sharebox { top: 100px; left: 10px; right: 10px; width: auto; max-height: calc(100vh - 110px); }
+  #sharebar { top: 100px; left: 10px; right: 10px; max-width: none; }
+  #sharebar.mini { right: auto; }
   .top-btns .btn.pill { padding: 5px 9px; }
   .brand { flex-direction: row; align-items: baseline; gap: 6px; }
   .chips#tags { order: 3; flex-basis: 100%; }

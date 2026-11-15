@@ -691,8 +691,9 @@
 
   function viewDados() {
     return '<h4>Salvar e carregar</h4>' +
-      '<p class="muted">Suas escolhas ficam salvas automaticamente neste navegador. Exporte um arquivo para guardar uma cópia ou abrir em outro aparelho.</p>' +
+      '<p class="muted">Suas escolhas ficam salvas automaticamente neste navegador. Compartilhe por link (o roteiro vai dentro do próprio link, sem servidor) ou exporte um arquivo para guardar uma cópia.</p>' +
       '<div class="btn-col">' +
+      '<button type="button" class="btn primary" data-act="share">Compartilhar por link…</button>' +
       '<button type="button" class="btn" data-act="export">Exportar JSON</button>' +
       '<button type="button" class="btn" data-act="import">Importar JSON</button>' +
       '<button type="button" class="btn danger" data-act="reset">Restaurar padrão</button></div>' +
