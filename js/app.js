@@ -82,6 +82,7 @@
       customPois: [],                           // pontos criados pelo usuário (mesmo formato de DATA.pois)
       ocultos: {},                              // sugestões ocultadas em "Descobrir por perto": { cidade: [títulos] }
       otim: { auto: true, criterio: 'tempo', fixarPontas: true },  // rota inteligente
+      jogos: [],                                // jogos de futebol cadastrados por mim (futebol.js)
       cenarios: [], cenarioAtivo: '',           // cenários A/B/C (cenarios.js); o ativo fica "vivo" nos campos acima
       cenComparar: [], cenNoMapa: false         // cenários escolhidos para comparar · comparar no mapa
     };
@@ -173,6 +174,8 @@
     ['obrig', 'proib'].forEach(k => { s.assist[k] = (Array.isArray(s.assist[k]) ? s.assist[k] : []).filter(id => cityById[id]); });
     s.assist.pontas = !!s.assist.pontas;
     s.spread = Math.max(0, Math.min(30, num(s.spread)));
+    s.jogos = (Array.isArray(s.jogos) ? s.jogos : []).map(j => window.Futebol.limpar(j)).filter(Boolean);
+    s.jogos.forEach(j => { delete j.origem; });
     window.Cenarios.garantir(s);   // dados antigos: o roteiro atual vira o "Cenário A"
     return s;
   }
@@ -750,6 +753,7 @@
     MapView.update();
     window.Clima.carregar();      // clima das cidades do roteiro (só busca o que falta)
     window.Trilhos.carregar();    // traçado real e paisagens dos trechos de trem (só o que falta)
+    window.Futebol.carregar();    // jogos automáticos (só se o proxy opcional estiver configurado)
     if (App.focus && App.focus.type !== 'info') window.Ape.carregar(App.focus.type === 'city' ? App.focus.id : App.poi(App.focus.id).cityId);
   };
 
@@ -997,6 +1001,7 @@
     window.Assistente.bind();
     window.Cenarios.bind();
     window.Compartilhar.bind();
+    window.Futebol.bind();
     UI.renderAll();
     window.Cenarios.render();
     MapView.init();
@@ -1010,6 +1015,7 @@
 
     window.Clima.carregar();
     window.Trilhos.carregar();
+    window.Futebol.carregar();
     window.Cambio.init();   // busca as cotações (modo automático) e o histórico de 90 dias
     window.Compartilhar.iniciar();   // link com #r=...: mostra o roteiro compartilhado em modo leitura
 

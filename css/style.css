@@ -374,6 +374,33 @@ li.on .cm-go b { background: var(--accent); border-color: var(--accent); color: 
 .cb-cities li.only { color: var(--accent); font-weight: 600; }
 .cb-cities li.vazio { list-style: none; margin-left: -18px; color: var(--muted); }
 
+/* futebol: clubes e jogos no painel da cidade, bola na linha do tempo */
+.tl-day s { position: absolute; left: 2px; top: 2px; text-decoration: none; line-height: 0; }
+.tl-day s .ic { width: 10px; height: 10px; fill: var(--accent); margin: 0; }
+.fut-vazio { margin: 12px 0 0; }
+.fut-jogos, .fut-clubes { list-style: none; margin: 0; padding: 0; }
+.fut-jogo { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 0 0 8px; background: var(--panel-2); }
+.fut-jogo.ok { border-color: var(--accent); }
+.fj-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+.fj-top span { font-size: 12px; color: #c9c9c9; font-variant-numeric: tabular-nums; }
+.fj-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.fj-meta i { font-style: normal; border: 1px solid var(--line); border-radius: 999px; padding: 0 6px; margin-left: 4px; font-size: 10px; }
+.fj-sit { margin: 6px 0 0; font-size: 12px; color: var(--accent); }
+.fj-sit.warn { color: #e4e4e4; border-left: 2px solid var(--accent); padding-left: 7px; }
+.fj-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+a.btn.sm { text-decoration: none; display: inline-block; }
+.fut-form { border: 1px dashed var(--line); border-radius: 12px; padding: 4px 12px 12px; margin: 8px 0; }
+.fut-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fut-form input { width: 100%; }
+.fut-form input[type=time] { color-scheme: dark; }
+.fut-clubes { margin-top: 12px; border-top: 1px solid var(--line); }
+.fut-clubes li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.fut-clubes b { font-size: 13px; font-weight: 600; }
+.fut-clubes small { display: block; font-size: 11.5px; color: var(--muted); }
+.fc-links { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; }
+.fc-links a, .fc-links button { color: var(--accent); background: none; border: 0; padding: 0; font-size: 12px; text-decoration: none; }
+.fc-links a:hover, .fc-links button:hover { text-decoration: underline; }
+
 /* link de compartilhamento: botão, janela e faixa do roteiro recebido */
 #btn-share { display: inline-flex; align-items: center; gap: 6px; }
 #sharebox {
@@ -478,7 +505,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line); border-radius: 
 .field label small { text-align: right; }
 .field.inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
 .field.inline label { margin: 0; }
-input[type=number], input[type=date], select {
+input[type=number], input[type=date], input[type=time], select {
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
   padding: 8px 10px; width: 100%; min-width: 0; color-scheme: dark;
   transition: border-color .2s, background .2s;
@@ -895,11 +922,11 @@ li.sug .sug-ph { width: 64px; height: 64px; border-radius: 10px; flex: none; }
 .hosp-box { margin-top: 10px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); }
 .hosp-box .field { margin: 0 0 8px; }
 .hosp-box .field:last-child { margin: 10px 0 0; }
-input[type=text] {
+input[type=text], input[type=url] {
   background: var(--panel); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; width: 100%; min-width: 0;
   transition: border-color .2s, background .2s;
 }
-input[type=text]:focus { outline: none; border-color: var(--accent); }
+input[type=text]:focus, input[type=url]:focus { outline: none; border-color: var(--accent); }
 .btn.wide { width: 100%; }
 .hosp-ok { font-size: 12.5px; color: var(--accent); }
 

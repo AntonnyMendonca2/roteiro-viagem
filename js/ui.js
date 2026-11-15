@@ -50,6 +50,7 @@
   /* ==================================================================== ícones */
   const ICONS = window.ICONS = {
     // caminhos 24×24 (Material Icons, Apache 2.0)
+    bola: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm0 3.6 4.2 3.05-1.6 4.95H9.4L7.8 10.65z',
     aviao: 'M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z',
     trem: 'M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h2.23l2-2H14l2 2h2v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-7H6V6h5v4zm2 0V6h5v4h-5zm3.5 7c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z'
   };
@@ -543,8 +544,9 @@
         dias.map(d => {
           const w = seg.type === 'cidade' ? avisos[seg.cityId + '|' + App.iso(d)] : '';
           const wx = window.Clima.tlHtml(id, d);        // temperatura típica e ícone do clima
+          const fb = seg.type === 'cidade' ? window.Futebol.tlHtml(id, d) : { html: '', titulo: '' };   // bola: jogo neste dia
           return '<button type="button" class="tl-day' + (w ? ' warn' : '') + '" data-act="day" data-id="' + esc(id) + '" data-dia="' + App.iso(d) + '" title="' +
-            esc(w || (Fmt.dow(d) + ', ' + Fmt.data(d) + (wx.titulo ? ' · ' + wx.titulo : ''))) + '"><i>' + Fmt.dow(d) + '</i><b>' + Fmt.data(d) + '</b>' + wx.html + (w ? '<u>!</u>' : '') + '</button>';
+            esc((w || (Fmt.dow(d) + ', ' + Fmt.data(d) + (wx.titulo ? ' · ' + wx.titulo : ''))) + (fb.titulo ? ' · ' + fb.titulo : '')) + '"><i>' + Fmt.dow(d) + '</i><b>' + Fmt.data(d) + '</b>' + wx.html + fb.html + (w ? '<u>!</u>' : '') + '</button>';
         }).join('') + '</div></div>';
     }).join('');
     els.timeline.innerHTML = c.route.length ? '<div class="tl-track">' + html + '</div>' : '';
@@ -743,6 +745,7 @@
         '<button type="button" class="pr-main" data-act="open-poi" data-id="' + p.id + '"><span class="pr-n">' + esc(p.nome) + (p.custom ? ' <i class="meu-tag" title="Adicionado por você">meu</i>' : '') + (w ? ' <i class="wdot" title="' + esc(w.texto) + '">!</i>' : '') + '</span>' +
         '<span class="pr-m">' + esc(p.preco.label) + ' · ' + esc(UI.dist(p).curto) + (p.tags.length ? ' · ' + esc(p.tags.join(', ')) : '') + '</span></button></li>';
     }).join('') : '<li class="empty">Nenhum ponto com a tag "' + esc(tag) + '" nesta cidade.</li>') + '</ul>';
+    html += window.Futebol.cityHtml(c);
     html += window.Descobrir.cityHtml(c);
     return html + '</div>';
   }
@@ -781,7 +784,7 @@
     html += '<div class="links">' +
       '<a class="btn" href="https://www.google.com/maps/search/?api=1&amp;query=' + ll + ext + 'Ver no Google Maps ↗</a>' +
       '<a class="btn" href="https://www.google.com/maps/dir/?api=1&amp;destination=' + ll + '&amp;travelmode=transit' + ext + 'Como chegar ↗</a>' +
-      (p.site ? '<a class="btn" href="' + esc(p.site) + ext + (p.custom ? 'Wikipedia ↗' : 'Site oficial ↗') + '</a>' : '') + '</div>';
+      (p.site ? '<a class="btn" href="' + esc(p.site) + ext + esc(p.siteRotulo || (p.custom ? 'Wikipedia' : 'Site oficial')) + ' ↗' + '</a>' : '') + '</div>';
     if (p.custom) html += '<button type="button" class="btn danger wide del" data-act="poi-delete" data-id="' + esc(p.id) + '">Excluir este ponto</button>';
     return html + '</div>';
   }

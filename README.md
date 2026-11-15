@@ -69,6 +69,9 @@ js/diaadia.js   roteiro dia a dia automático de cada cidade
 js/assistente.js assistente "Tenho X dias e R$ Y: o que cabe?" (otimizador em Web Worker)
 js/cenarios.js   cenários A/B/C: versões do roteiro e comparação lado a lado
 js/compartilhar.js link de compartilhamento (roteiro dentro do link), QR code, mesclar
+js/futebol.js    clubes, jogos cadastrados à mão, avisos de data e busca automática opcional
+js/data-futebol.js clubes de cada cidade, DATA.jogos e o endereço do proxy opcional
+worker/futebol.js Cloudflare Worker opcional (guarda a chave da football-data.org)
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -190,6 +193,29 @@ descartar o que estava salvo no navegador.
 Os preços e tempos são aproximados e servem de referência — confira nos sites oficiais antes de
 comprar.
 
+### Futebol
+
+No painel de cada cidade com clubes relevantes há a seção **Futebol** (64 clubes em 43 cidades — Londres: Arsenal, Chelsea, Tottenham e West Ham; Paris: PSG; Cracóvia: Wisła e Cracovia; Munique: Bayern; etc.):
+
+- **Clubes:** estádio, liga e os links oficiais de **Calendário** e **Ingressos**. Quando o tour do estádio já é um ponto de interesse, aparece o atalho **Tour do estádio**.
+- **Jogos:** não existe API de jogos gratuita, sem chave e que o navegador possa chamar; por isso os jogos são **cadastrados à mão** — em **Adicionar jogo** (data, hora local, mandante, visitante, competição, estádio e link de ingressos) ou em `DATA.jogos`, no `js/data-futebol.js`. Dá para editar e excluir os que você cadastrou.
+- Cada jogo mostra como cai nas suas datas: "Você estará em Londres neste dia", "Você chega 1 dia depois do jogo", "Você sai 2 dias antes do jogo" ou cidade fora do roteiro. Jogos nas datas do roteiro ganham uma **bola na linha do tempo**.
+- **Pôr no orçamento** transforma o jogo em um ponto de interesse no estádio, fixado no dia do jogo: informe o valor do ingresso e ele entra no total e no dia a dia. O tour do estádio entra no orçamento como qualquer ponto.
+
+#### Jogos automáticos (opcional)
+
+Se você quiser que os jogos apareçam sozinhos, crie um **Cloudflare Worker** que guarda a chave da football-data.org. **A chave fica só no Worker; o site nunca a contém.**
+
+1. Crie a chave grátis em <https://www.football-data.org/client/register> (chega por e-mail).
+2. Em <https://dash.cloudflare.com> → **Workers & Pages** → **Create** → **Worker** (o plano grátis basta). Dê um nome (ex.: `futebol`) e clique em **Deploy**.
+3. **Edit code**: apague o exemplo, cole o conteúdo de `worker/futebol.js` e clique em **Deploy**.
+4. **Settings → Variables and Secrets**:
+   - `FOOTBALL_DATA_KEY` (tipo **Secret**): a sua chave;
+   - `ALLOWED_ORIGINS` (tipo **Text**): os endereços que podem usar o Worker, separados por vírgula, sem barra no fim — ex.: `https://seu-usuario.github.io,http://localhost:8000`.
+5. Copie o endereço do Worker (ex.: `https://futebol.seu-usuario.workers.dev`) para `DATA.config.futebolProxyUrl`, no fim do `js/data-futebol.js`.
+
+Com isso, o app busca os jogos **em casa** dos clubes das cidades do roteiro (dois dias antes da chegada até dois dias depois da saída), guarda por 12 horas e mostra com a etiqueta "automático". O Worker só aceita os domínios autorizados, só repassa a consulta "jogos de um time entre duas datas" e guarda cada resposta por 6 horas. O plano grátis da football-data.org cobre as grandes ligas (Inglaterra, Alemanha, Espanha, Itália, França, Holanda, Portugal e a Champions); os clubes cobertos têm o campo `fd` (número do time na API) no `js/data-futebol.js` — os números foram anotados de memória: se algum clube não trouxer jogos, confira o número em `https://api.football-data.org/v4/competitions/<liga>/teams`. Clubes de outras ligas (ex.: a polonesa) continuam só com o cadastro à mão. Não funciona em `file://` (o navegador não envia o domínio).
+
 ### Cenários A/B/C
 
 O botão **Cenário** (barra superior) guarda várias versões do roteiro — por exemplo "Com Roma" e "Só Leste Europeu":
@@ -225,6 +251,8 @@ guardado ou mostra um aviso discreto. Nenhuma chave de API fica no código do si
 | Tempos e caminhos a pé | [OSRM](https://routing.openstreetmap.de) perfil de pedestres (servidor comunitário: 1 por segundo) | 180 dias |
 | Horários reais de trem | [Transitous](https://transitous.org) | 24 h |
 | Fotos, lugares próximos e popularidade | Wikipedia / Wikimedia | 30 dias |
+| QR code do link de compartilhamento | biblioteca `qrcode-generator@1.4.4` (jsDelivr), carregada só ao abrir a janela | — |
+| Jogos de futebol (opcional, desligado por padrão) | football-data.org **pelo seu Cloudflare Worker** (a chave fica no Worker) | 12 h |
 
 ## Testes
 

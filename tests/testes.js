@@ -672,6 +672,77 @@
     igual(Comp.mesclar(S, O), { cidades: 0, pontos: 0 }, 'mesclar de novo não muda nada');
   });
 
+  /* ------------------------------------------------------------ futebol */
+  grupo('Futebol');
+  const Fut = window.Futebol;
+
+  teste('Clubes: cidade existe, links https e tour ligado a um ponto da mesma cidade', () => {
+    ok(D.clubes.length >= 40, 'lista de clubes');
+    const ids = {};
+    D.clubes.forEach(k => {
+      ok(!ids[k.id], 'id repetido: ' + k.id); ids[k.id] = true;
+      ok(App.city(k.cityId), k.id + ': cidade ' + k.cityId);
+      ok(/^https:\/\//.test(k.calendario) && /^https:\/\//.test(k.ingressos), k.id + ': links');
+      ok(isFinite(k.lat) && isFinite(k.lon) && App.distKm(k, App.city(k.cityId)) < 30, k.id + ': estádio perto da cidade');
+      if (k.poi) { const p = D.pois.find(x => x.id === k.poi); ok(p && p.cityId === k.cityId, k.id + ': tour ' + k.poi); }
+    });
+    igual(Fut.clubes('londres').map(k => k.id), ['arsenal', 'chelsea', 'tottenham', 'west-ham']);
+    igual(Fut.clubes('cracovia').map(k => k.id), ['wisla', 'cracovia']);
+    ok(Fut.clubes('paris')[0].id === 'psg' && Fut.clubes('munique')[0].id === 'bayern', 'PSG e Bayern');
+    ok(Fut.clube('arsenal').poi === 'emirates-stadium', 'tour do Emirates ligado ao Arsenal');
+  });
+
+  teste('Jogo nas datas do roteiro: dentro, "chega 1 dia depois", "sai N dias antes", cidade fora', () => {
+    const S = novoEstado();
+    App.calc = T.compute({ leve: true });
+    const seg = App.calc.segByCity.londres, dia = n => App.iso(App.addDays(seg.start, n));
+    const j = (data, cityId) => ({ id: 'x', data, hora: '15:00', casa: 'Arsenal', fora: 'Chelsea', cityId: cityId || 'londres' });
+    ok(S.cities.londres.noites >= 2, 'Londres com 2+ noites no padrão');
+    igual(Fut.situacao(j(dia(1))).tipo, 'ok');
+    igual(Fut.situacao(j(dia(0))).tipo, 'chegada');
+    igual(Fut.situacao(j(dia(seg.nights))).tipo, 'saida');
+    const antes = Fut.situacao(j(dia(-1)));
+    ok(antes.tipo === 'antes' && !antes.ok && antes.texto === 'Você chega 1 dia depois do jogo', antes.texto);
+    const depois = Fut.situacao(j(dia(seg.nights + 3)));
+    ok(depois.tipo === 'depois' && depois.texto === 'Você sai 3 dias antes do jogo', depois.texto);
+    igual(Fut.situacao(j(dia(1), 'madri')).tipo, 'fora');
+  });
+
+  teste('Jogos cadastrados: validação, lista por cidade, bola na linha do tempo e ponto para o orçamento', () => {
+    const S = novoEstado();
+    App.calc = T.compute({ leve: true });
+    const d1 = App.iso(App.addDays(App.calc.segByCity.londres.start, 1));
+    S.jogos.push({ id: 'j1', data: d1, hora: '17:30', casa: 'arsenal', fora: 'Chelsea', comp: 'Premier League', cityId: 'londres', ingressos: 'javascript:alert(1)' },
+      { data: 'amanhã', casa: 'A', fora: 'B', cityId: 'londres' }, { data: d1, casa: 'A', fora: 'B', cityId: 'nao-existe' }, { data: d1, casa: '', fora: 'B', cityId: 'paris' });
+    T.sanitize(S);
+    igual(S.jogos.map(j => j.id), ['j1'], 'só o jogo válido fica');
+    ok(S.jogos[0].ingressos === '', 'link que não é http(s) é descartado');
+    const js = Fut.daCidade('londres');
+    ok(js.length === 1 && js[0].origem === 'meu' && Fut.clubeDe(js[0]).id === 'arsenal', 'mandante reconhecido pelo nome');
+    ok(Fut.tlHtml('londres', App.parseDate(d1)).html.indexOf('tl-ball') > 0 && Fut.tlHtml('londres', App.addDays(App.parseDate(d1), 1)).html === '', 'bola só no dia do jogo');
+    const p = Fut.pontoDe(js[0]);
+    ok(/^u-jogo-/.test(p.id) && p.cityId === 'londres' && p.lat === Fut.clube('arsenal').lat && p.tags[0] === 'Futebol', 'ponto no estádio do mandante');
+    S.customPois.push(p); T.sanitize(S);
+    ok(S.customPois.length === 1 && S.pois[p.id], 'o ponto do jogo é aceito como ponto do usuário (entra no orçamento)');
+  });
+
+  teste('Automático: resposta da football-data.org → jogos em casa, na hora local do estádio', () => {
+    novoEstado();
+    const k = Fut.clube('arsenal');
+    const r = Fut.resumir({ matches: [
+      { id: 1, utcDate: '2027-03-06T17:30:00Z', status: 'TIMED', competition: { name: 'Premier League' }, homeTeam: { id: 57, shortName: 'Arsenal' }, awayTeam: { id: 61, shortName: 'Chelsea' } },
+      { id: 2, utcDate: '2027-03-09T20:00:00Z', status: 'TIMED', competition: { name: 'Premier League' }, homeTeam: { id: 73, shortName: 'Tottenham' }, awayTeam: { id: 57, shortName: 'Arsenal' } },
+      { id: 3, utcDate: '2027-03-13T00:00:00Z', status: 'SCHEDULED', competition: { name: 'FA Cup' }, homeTeam: { id: 57, name: 'Arsenal FC' }, awayTeam: null }
+    ] }, k);
+    igual(r.map(j => j.id), ['a-1', 'a-3'], 'só os jogos em casa');
+    ok(r[0].data === '2027-03-06' && r[0].hora === '17:30' && r[0].fora === 'Chelsea' && r[0].cityId === 'londres' && r[0].estadio === 'Emirates Stadium', JSON.stringify(r[0]));
+    ok(r[1].hora === '' && r[1].fora === 'a definir', 'hora ainda não definida');
+    igual(Fut.horaLocal('2027-07-10T19:00:00Z', 'Europe/Paris'), { data: '2027-07-10', hora: '21:00' });
+    igual(Fut.horaLocal('2027-03-06T23:30:00Z', 'Europe/Athens'), { data: '2027-03-07', hora: '01:30' });
+    igual(Fut.resumir(null, k), []);
+    ok(!D.config.futebolProxyUrl, 'o proxy vem desligado por padrão (nenhuma chave no site)');
+  });
+
   /* ------------------------------------------------------------ utilitários */
   grupo('Utilitários');
 
