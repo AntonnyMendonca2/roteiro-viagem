@@ -784,9 +784,13 @@
 
   teste('Sem Worker configurado: link completo (#r=)', async () => {
     novoEstado();
-    const r = await window.Compartilhar.link({});
-    ok(/#r=1[zj]/.test(r.url), r.url.slice(-40));
-    ok(!r.curto, 'não deveria ser curto');
+    const urlReal = D.config.linkCurtoUrl;
+    D.config.linkCurtoUrl = '';
+    try {
+      const r = await window.Compartilhar.link({});
+      ok(/#r=1[zj]/.test(r.url), r.url.slice(-40));
+      ok(!r.curto && !r.erroCurto, 'não deveria tentar o link curto');
+    } finally { D.config.linkCurtoUrl = urlReal; }
   });
 
   teste('Com Worker: link curto (#s=) e o completo como alternativa; ida e volta', async () => {

@@ -38,6 +38,31 @@
     }
   }
 
+  // Tira do roteiro o que o app recria sozinho com o valor padrão (campos vazios dos trechos)
+  // e limpa os links (parâmetros de rastreamento do Airbnb/Booking). Não muda o roteiro.
+  function enxugar(o) {
+    if (!isObj(o)) return;
+    const hp = D.config.hospedagemPernoite, igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+    const link = u => (window.UI && window.UI.limparLink ? window.UI.limparLink(u) : u);
+    if (isObj(o.legs)) Object.keys(o.legs).forEach(k => {
+      const l = o.legs[k];
+      if (!isObj(l)) return;
+      if (l.link === '' || l.link == null) delete l.link; else l.link = link(l.link);
+      if (l.pernoite === true) delete l.pernoite;
+      if (isObj(l.hospedagem) && igual(l.hospedagem, hp)) delete l.hospedagem;
+      if (isObj(l.real) && (l.real.v === '' || l.real.v == null)) delete l.real;
+      ['horas', 'partida'].forEach(x => { if (isObj(l[x]) && !Object.keys(l[x]).length) delete l[x]; });
+      if (!Object.keys(l).length) delete o.legs[k];
+    });
+    if (isObj(o.cities)) Object.keys(o.cities).forEach(id => {
+      const h = isObj(o.cities[id]) && o.cities[id].hosp;
+      if (!isObj(h)) return;
+      if (typeof h.link === 'string') h.link = link(h.link);
+      if (typeof h.nome === 'string' && /^https?:\/\//.test(h.nome)) h.nome = link(h.nome);
+    });
+  }
+  Comp.enxugar = enxugar;
+
   // Objeto compacto do roteiro: só o que difere do padrão.
   // opts.privado: sem hospedagens e valores · opts.todos: leva todos os cenários (senão, só o ativo).
   Comp.montar = function (S, opts) {
@@ -52,6 +77,8 @@
       limpar(e, true);
       e.cenarios.forEach(c => limpar(c.dados, false));
     }
+    enxugar(e);
+    e.cenarios.forEach(c => enxugar(c.dados));
     return T.diff(T.defaults(), e) || {};
   };
 
