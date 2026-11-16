@@ -1,0 +1,4 @@
+# ads.txt — vendedores autorizados de anúncios deste site (exigido pelo Google AdSense).
+# Quando o AdSense for aprovado, troque a linha abaixo pela que o AdSense mostrar
+# (Sites → ads.txt), sem o "#" no começo:
+# google.com, pub-0000000000000000, DIRECT, f08c47fec0942fa0

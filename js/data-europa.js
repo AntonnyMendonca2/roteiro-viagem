@@ -309,22 +309,6 @@
   const pr = D.legs.find(l => l.a === 'paris' && l.b === 'roma');
   if (pr && pr.trem) pr.trem.via = { cityId: 'milao' };
 
-  /* ------------------------------------------------ pontas do roteiro (Viracopos)
-     via: cidade por onde a linha da ida é desenhada (null = voo direto). */
-  const V = D.origem.voos;
-  const direto = { h: [10, 12], desc: 'Voo direto (confira se opera na sua data)', via: null };
-  const conexao = h => ({ h, desc: 'Com conexão' });
-  Object.assign(V.ida, {
-    lisboa: { h: [10, 11], desc: 'Voo direto', via: null }, porto: Object.assign({}, direto), madri: Object.assign({}, direto),
-    paris: { h: [11, 12], desc: 'Voo direto (Orly) ou com conexão', via: null },
-    frankfurt: conexao([14, 17]), roma: conexao([14, 17]), amsterda: conexao([14, 17]), istambul: conexao([16, 20])
-  });
-  Object.assign(V.volta, {
-    porto: Object.assign({}, direto), madri: Object.assign({}, direto),
-    paris: { h: [11.5, 12.5], desc: 'Voo direto (Orly) ou com conexão', via: null },
-    londres: conexao([14, 17]), frankfurt: conexao([14, 17]), roma: conexao([14, 17]), amsterda: conexao([14, 17]), istambul: conexao([16, 20])
-  });
-
   /* ------------------------------------ áreas somente informativas (não selecionáveis) */
   D.infoAreas = [
     { pais: D.infoArea.pais, paisIso: D.infoArea.paisIso, aviso: 'País em guerra. Turismo suspenso.' },

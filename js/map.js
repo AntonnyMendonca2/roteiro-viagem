@@ -25,7 +25,7 @@
   const TILE_FADE = [2.5, 6];  // faixa de zoom (k) em que o mapa de ruas substitui o de países
   // Pontos que definem o enquadramento de "Ver Europa inteira": da Islândia a Chipre, da Lapônia a Malta.
   const FRAME = { type: 'MultiPoint', coordinates: [[-24.5, 34.2], [-24.5, 67.2], [35.5, 34.2], [35.5, 67.2]] };
-  const VCP_LL = [-20.5, 36.8];   // Viracopos fica fora do mapa: marcador no Atlântico, a sudoeste da Europa
+  const VCP_LL = [-20.5, 36.8];   // o aeroporto de saída (Brasil) fica fora do mapa: marcador no Atlântico, a sudoeste da Europa
   const REDUCED = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const POI_ZOOM = 4;          // a partir deste zoom os pontos de interesse aparecem
   const PX_KM_MAX = 90;        // zoom máximo ao enquadrar uma cidade (px por km)
@@ -268,7 +268,7 @@
   };
 
   function drawMarkers() {
-    // cidades (+ Viracopos)
+    // cidades (+ aeroporto de saída)
     const cities = L.cities.selectAll('g.city').data(cityPts, d => d.id).join(enter => {
       const g = enter.append('g').attr('class', 'mk city');
       g.append('circle').attr('class', 'pulse').attr('r', 6);
@@ -291,11 +291,12 @@
       const g = enter.append('g').attr('class', 'mk vcp');
       g.append('circle').attr('class', 'dot').attr('r', 11);
       g.append('path').attr('d', window.ICONS.aviao).attr('transform', 'translate(-7.2,-7.2) scale(0.6)');
-      g.append('text').attr('class', 'lbl').attr('x', 16).attr('y', 4).text(D.origem.nome);
+      g.append('text').attr('class', 'lbl').attr('x', 16).attr('y', 4);
       g.append('circle').attr('class', 'hit').attr('r', 16);
       bindPoint(g, 'vcp');
       return g;
     });
+    v.select('text.lbl').text(A().origem().nomeCurto);     // muda com "Saindo de"
     place(v);
 
     drawPois();
@@ -440,7 +441,8 @@
     if (type === 'sug') return { nome: d.nome, foto: d.foto, preco: 'Sugestão da Wikipedia', status: 'Não cadastrado', on: false, aviso: d.desc };
     if (type === 'cena') return { nome: d.nome, foto: d.foto, preco: 'Paisagem no caminho do trem', status: d.lado === 'dir' ? 'Janela direita' : 'Janela esquerda', on: false, aviso: d.desc };
     if (type === 'info') return { nome: d.i.nome, wiki: d.i.wiki, preco: 'Somente informativo', status: 'Não selecionável', on: false, aviso: d.i.aviso };
-    return { nome: D.origem.nome, wiki: D.origem.wiki, preco: 'Aeroporto de Viracopos', status: 'Origem e destino', on: true };
+    const o = A().origem();
+    return { nome: o.nome, wiki: o.wiki, preco: 'Aeroporto de saída · troque em “Saindo de”', status: 'Origem e destino', on: true };
   }
 
   function showCard(type, d) {
@@ -625,6 +627,7 @@
   /* ====================================================== estado → aparência */
   M.update = function () {
     const App = A(), S = App.state, calc = App.calc, tag = S.tag;
+    L.cities.select('g.vcp text.lbl').text(App.origem().nomeCurto);   // "Saindo de" mudou o aeroporto
 
     L.cities.selectAll('g.city')
       .classed('sel', d => S.cities[d.id].sel)
@@ -859,7 +862,7 @@
     M.update();
   };
 
-  // Enquadra o roteiro atual (cidades selecionadas + Viracopos). Sem roteiro, mostra a Europa inteira.
+  // Enquadra o roteiro atual (cidades selecionadas + aeroporto de saída). Sem roteiro, mostra a Europa inteira.
   M.fitRoute = function (semAnimar) {
     const ids = A().calc.route;
     if (!ids.length) { M.reset(); return; }

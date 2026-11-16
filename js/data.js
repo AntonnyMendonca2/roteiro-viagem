@@ -10,7 +10,7 @@ window.DATA = {
 
   /* ---------------------------------------------------------------- config */
   config: {
-    dataSaida: '2027-03-02',          // data de saída de Viracopos (AAAA-MM-DD)
+    dataSaida: '2027-03-02',          // data de saída do Brasil (AAAA-MM-DD)
     orcamento: 0,                     // orçamento total em R$ (0 = não definido)
     iof: false,                       // somar IOF em valores em moeda estrangeira
     iofPct: 3.5,                      // percentual do IOF
@@ -27,7 +27,13 @@ window.DATA = {
     linkCurtoUrl: 'https://fancy-tooth-7972.antonnymendonca.workers.dev',
     // CAPTCHA (Cloudflare Turnstile) ao gerar link curto e link de edição: a CHAVE DO SITE (pública).
     // A chave secreta fica só no Worker (TURNSTILE_SECRET). Vazio = não pede CAPTCHA.
-    turnstileSiteKey: '0x4AAAAAAGEEL0lTUSCwfBiI'
+    turnstileSiteKey: '0x4AAAAAAGEEL0lTUSCwfBiI',
+
+    // privacidade e transparência (páginas privacidade.html e como-e-mantido.html, js/consent.js)
+    responsavel: { nome: 'Antonny Mendonça', email: 'antonnymendonca@gmail.com' },   // contato para pedidos de privacidade (LGPD)
+    linkCurtoValidadeDias: 5,         // mantenha igual ao TTL_DIAS do Worker (aparece na página Privacidade)
+    adsenseCliente: '',               // Google AdSense, ex.: 'ca-pub-1234567890123456' (vazio = sem anúncios)
+    avisoParceiros: true              // linha "Buscas em sites parceiros" perto dos botões de busca
   },
 
   /* ------------------------------------------------------ moedas e câmbio */
@@ -78,22 +84,38 @@ window.DATA = {
     // por terra não há estimativa "em linha reta": o app usa a rede de trechos da tabela
   },
 
-  /* ------------------------------------------------- origem: Viracopos (VCP) */
-  origem: {
-    id: 'vcp',
-    nome: 'Campinas – VCP',
-    nomeCurto: 'Campinas (VCP)',
-    iata: 'VCP',
-    lat: -23.0074, lon: -47.1345,   // usado na rota inteligente sem pontas fixas
-    wiki: 'Viracopos International Airport',
-    viaIda: 'lisboa',      // a ida é desenhada passando por esta cidade
-    voos: {
-      ida:   { londres:  { h: [14, 16], desc: 'Com conexão em Lisboa' },
-               lisboa:   { h: [10, 11], desc: 'Voo direto' } },
-      volta: { cracovia: { h: [16, 20], desc: 'Com conexão' },
-               lisboa:   { h: [10, 11], desc: 'Voo direto' } },
-      generico: { h: [14, 20], desc: 'Com conexão' }
-    }
+  /* ------------------------------------------------------- aeroportos de saída
+     O usuário escolhe em "Saindo de" (Meu roteiro); padrão: Campinas (VCP).
+     wikiRotas: página do aeroporto na Wikipedia (em inglês) de onde saem os destinos diretos
+     (js/rotas.js; cópia em js/data-rotas.js, gerada por `npm run rotas`).
+     No app, o aeroporto de saída é o ponto 'vcp' da rota (chave interna mantida por compatibilidade). */
+  origemPadrao: 'VCP',
+  aeroportos: [
+    { iata: 'BEL', cidade: 'Belém',          nome: 'Val-de-Cans',     lat: -1.3792,  lon: -48.4763, wikiRotas: 'Belém/Val-de-Cans International Airport' },
+    { iata: 'CNF', cidade: 'Belo Horizonte', nome: 'Confins',         lat: -19.6244, lon: -43.9719, wikiRotas: 'Belo Horizonte International Airport' },
+    { iata: 'BSB', cidade: 'Brasília',       nome: 'Juscelino Kubitschek', lat: -15.8711, lon: -47.9186, wikiRotas: 'Brasília International Airport' },
+    { iata: 'VCP', cidade: 'Campinas',       nome: 'Viracopos',       lat: -23.0074, lon: -47.1345, wikiRotas: 'Viracopos International Airport' },
+    { iata: 'FLN', cidade: 'Florianópolis',  nome: 'Hercílio Luz',    lat: -27.6703, lon: -48.5525, wikiRotas: 'Hercílio Luz International Airport' },
+    { iata: 'FOR', cidade: 'Fortaleza',      nome: 'Pinto Martins',   lat: -3.7763,  lon: -38.5326, wikiRotas: 'Fortaleza Airport' },
+    { iata: 'MAO', cidade: 'Manaus',         nome: 'Eduardo Gomes',   lat: -3.0386,  lon: -60.0497, wikiRotas: 'Eduardo Gomes International Airport' },
+    { iata: 'NAT', cidade: 'Natal',          nome: 'São Gonçalo do Amarante', lat: -5.7681, lon: -35.3761, wikiRotas: 'Greater Natal International Airport' },
+    { iata: 'POA', cidade: 'Porto Alegre',   nome: 'Salgado Filho',   lat: -29.9939, lon: -51.1714, wikiRotas: 'Salgado Filho Porto Alegre International Airport' },
+    { iata: 'REC', cidade: 'Recife',         nome: 'Guararapes',      lat: -8.1265,  lon: -34.9236, wikiRotas: 'Recife/Guararapes–Gilberto Freyre International Airport' },
+    { iata: 'GIG', cidade: 'Rio de Janeiro', nome: 'Galeão',          lat: -22.8100, lon: -43.2506, wikiRotas: 'Rio de Janeiro/Galeão International Airport' },
+    { iata: 'SSA', cidade: 'Salvador',       nome: 'Luís Eduardo Magalhães', lat: -12.9086, lon: -38.3225, wikiRotas: 'Salvador Bahia Airport' },
+    { iata: 'GRU', cidade: 'São Paulo',      nome: 'Guarulhos',       lat: -23.4356, lon: -46.4731, wikiRotas: 'São Paulo/Guarulhos International Airport' }
+  ],
+
+  /* Voo internacional (Brasil ⇄ Europa): a duração é ESTIMADA pela distância — nenhuma fonte grátis
+     informa o tempo de voo. Direto = destino listado nas rotas do aeroporto; senão, com conexão no
+     destino direto (hub) que der o menor caminho total. Volta: um pouco mais longa (vento contra). */
+  voosIntl: {
+    kmh: 830,            // velocidade média de cruzeiro
+    extraH: 0.6,         // decolagem, pouso e taxiamento (por voo)
+    desvio: 1.04,        // a rota real é um pouco mais longa que a linha reta
+    conexaoH: 3,         // espera média na conexão
+    voltaH: 0.5,         // a volta para o Brasil leva um pouco mais
+    faixaH: 0.5          // a faixa mostrada é a estimativa ± este valor
   },
 
   /* ---------------------------------------------------------------- cidades

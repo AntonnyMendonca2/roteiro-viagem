@@ -506,6 +506,10 @@ kbd { background: var(--panel-3); border: 1px solid var(--line); border-radius: 
 .field label small { text-align: right; }
 .field.inline { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
 .field.inline label { margin: 0; }
+.field.inline.origem { margin-bottom: 4px; }
+.field.inline.origem label { white-space: nowrap; }
+.field.inline.origem select { width: auto; max-width: 70%; }
+.origem-info { margin: 0 0 12px; font-size: 11.5px; }
 input[type=number], input[type=date], input[type=time], select {
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
   padding: 8px 10px; width: 100%; min-width: 0; color-scheme: dark;
@@ -1132,3 +1136,24 @@ div.bag.warn b { color: var(--accent); }
 /* valor da hospedagem dentro do quadro "Minha hospedagem" */
 .hosp-valor { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
 .hosp-valor .field { margin: 0; }
+
+/* ======================================================= tour guiado (js/tour.js) */
+#tour { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+#tour .tr-bl { position: fixed; background: rgba(0, 0, 0, .62); pointer-events: auto; transition: all .25s ease; }
+#tour .tr-foco { position: fixed; border: 2px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 4px rgba(245, 184, 65, .18); pointer-events: none; transition: all .25s ease; }
+#tour .tr-balao {
+  position: fixed; pointer-events: auto; background: #1d1d1d; border: 1px solid #3c3c3c; border-radius: 14px;
+  padding: 14px 16px 12px; box-shadow: 0 12px 36px rgba(0, 0, 0, .6); transition: top .25s ease, left .25s ease;
+}
+#tour .tr-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 4px; }
+#tour .tr-cont { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 600; }
+#tour .tr-pular { background: none; border: 0; padding: 4px 0; color: var(--muted); font-size: 12.5px; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+#tour .tr-pular:hover { color: var(--text); }
+#tour h3 { margin: 0 0 6px; font-size: 16px; }
+#tour .tr-ok { color: var(--accent); }
+#tour p { margin: 0 0 8px; font-size: 13.5px; line-height: 1.5; color: #d2d2d2; }
+#tour .tr-dica { font-size: 12px; color: var(--muted); }
+#tour .tr-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 10px; }
+#tour .tr-btns .btn[disabled] { opacity: .4; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { #tour .tr-bl, #tour .tr-foco, #tour .tr-balao { transition: none; } }
+#tour.tr-livre .tr-bl { pointer-events: none; background: rgba(0, 0, 0, .35); }

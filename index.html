@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/consent.css">
 </head>
 <body>
 
@@ -77,6 +78,8 @@
         </nav>
         <div id="views"></div>
         <section id="compare" aria-label="Comparativo trem × avião"></section>
+        <!-- espaço reservado para anúncios (fora do mapa; só aparece com AdSense ligado e permitido — js/consent.js) -->
+        <aside id="anuncio-lateral" class="ad-slot" aria-label="Publicidade"><span class="ad-rotulo">Publicidade</span></aside>
       </div>
       <!-- detalhes da cidade / ponto (desliza por cima das abas) -->
       <div id="detail" aria-live="polite"></div>
@@ -88,6 +91,7 @@
   <div id="legend"></div>
   <div id="mapinfo">
     <div id="scale" aria-label="Escala do mapa"><i></i><span></span></div>
+    <nav id="rodape" aria-label="Informações do site"><a href="privacidade.html" target="_blank" rel="noopener">Privacidade</a> · <a href="como-e-mantido.html" target="_blank" rel="noopener">Como o site é mantido</a> · <button type="button" data-act="cookies">Cookies</button></nav>
     <div id="attrib">Mapa © <a href="https://www.esri.com" target="_blank" rel="noopener noreferrer">Esri</a>, HERE, Garmin, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a></div>
   </div>
 

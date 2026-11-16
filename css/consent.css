@@ -1,0 +1,51 @@
+/* ==========================================================================
+   consent.css — banner de cookies, aviso de parceiros, rodapé e espaço de anúncio.
+   Usado pelo app (index.html) e pelas páginas privacidade.html e como-e-mantido.html.
+   ========================================================================== */
+
+/* banner / configuração de cookies: no rodapé, sem cobrir o mapa inteiro */
+#consent { display: none; }
+#consent.show {
+  display: flex; align-items: center; gap: 16px;
+  position: fixed; z-index: 60; left: 16px; bottom: 16px;
+  width: min(760px, calc(100vw - var(--sidebar-w, 0px) - 32px));
+  background: #1b1b1b; color: var(--text, #ececec); border: 1px solid #3a3a3a; border-radius: 14px;
+  padding: 14px 16px; box-shadow: 0 8px 28px rgba(0, 0, 0, .55); font-size: 13px; line-height: 1.45;
+}
+#consent.config { flex-direction: column; align-items: stretch; max-height: min(78vh, 640px); overflow-y: auto; }
+#consent .cs-txt { flex: 1; min-width: 0; }
+#consent .cs-txt > b { display: block; font-size: 14px; margin-bottom: 2px; }
+#consent .cs-txt p { margin: 0; color: #c9c9c9; }
+#consent a { color: var(--accent, #F5B841); }
+/* os três botões com o MESMO destaque: recusar não fica escondido */
+#consent .cs-btns { display: flex; gap: 8px; flex: none; flex-wrap: wrap; }
+#consent .cs-btns .btn { min-width: 104px; justify-content: center; text-align: center; background: #262626; border-color: #4a4a4a; }
+#consent .cs-btns .btn:hover { border-color: var(--accent, #F5B841); }
+#consent .cs-cats { display: flex; flex-direction: column; gap: 8px; }
+#consent .cs-cat { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; background: #222; border: 1px solid #333; border-radius: 10px; cursor: pointer; }
+#consent .cs-cat input { margin-top: 3px; accent-color: var(--accent, #F5B841); width: 16px; height: 16px; flex: none; }
+#consent .cs-cat span { display: flex; flex-direction: column; gap: 2px; }
+#consent .cs-cat b small { font-weight: 400; color: var(--muted, #909090); margin-left: 6px; }
+#consent .cs-cat > span > small { color: #b0b0b0; font-size: 12px; }
+
+/* "Buscas em sites parceiros" (uma linha discreta perto dos botões de busca) */
+.parceiros { margin: 6px 0 0; font-size: 11px; color: var(--muted, #909090); }
+.parceiros a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.parceiros a:hover { color: var(--text, #ececec); }
+
+/* rodapé do mapa: Privacidade · Como o site é mantido · Cookies */
+#rodape { font-size: 10.5px; color: #9a9a9a; pointer-events: auto; text-shadow: 0 0 3px #000; }
+#rodape a, #rodape button { color: inherit; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+#rodape a:hover, #rodape button:hover { color: var(--text, #ececec); }
+
+/* espaço reservado para anúncio: fora do mapa (fim da lateral); só aparece com anúncios carregados */
+.ad-slot { display: none; }
+.com-anuncios .ad-slot { display: block; margin: 0 14px 14px; min-height: 120px; border: 1px dashed #333; border-radius: 10px; padding: 6px; }
+.ad-slot .ad-rotulo { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: #777; margin-bottom: 4px; }
+.tour-ativo .ad-slot { display: none !important; }      /* nunca durante o tour */
+
+@media (max-width: 820px) {
+  #consent.show { left: 8px; right: 8px; bottom: 8px; width: auto; flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; }
+  #consent .cs-btns .btn { flex: 1; min-width: 0; }
+  #rodape { font-size: 10px; }
+}

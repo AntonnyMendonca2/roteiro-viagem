@@ -9,7 +9,8 @@
 name = "fancy-tooth-7972"            # nome do Worker que já existe na sua conta (o começo do endereço *.workers.dev)
 main = "roteiro.js"
 compatibility_date = "2026-11-01"
-workers_dev = true
+workers_dev = true                   # endereço oficial: https://fancy-tooth-7972.antonnymendonca.workers.dev
+preview_urls = false                 # produção: sem endereços extras de pré-visualização por versão
 
 # Mantém as variáveis cadastradas no painel (ALLOWED_ORIGINS, TTL_DIAS): o deploy não apaga nem muda.
 keep_vars = true

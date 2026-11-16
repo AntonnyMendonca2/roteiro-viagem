@@ -221,7 +221,7 @@
       });
       return ops;
     }));
-    const voo = (c, sentido) => { const v = D.origem.voos[sentido][c.id] || D.origem.voos.generico; return (v.h[0] + v.h[1]) / 2; };
+    const voo = (c, sentido) => App.vooIntl(c.id, sentido === 'ida').medio;   // estimativa do voo internacional (app.js)
     let gerais = 0;
     D.gerais.forEach(g => { gerais += App.toBRL(S.gerais[g.id].v, S.gerais[g.id].cur); });
     const rota = App.calc.route, pontas = cfg.pontas && rota.length >= 1;

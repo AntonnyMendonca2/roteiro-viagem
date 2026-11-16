@@ -59,6 +59,14 @@ css/style.css   estilo (monocromático + 1 cor de destaque)
 js/main.js      entrada do build: importa os scripts abaixo na ordem certa
 js/data.js      objeto DATA: cidades e pontos do roteiro original, trechos, câmbio, itens gerais
 js/data-europa.js    Europa completa: demais cidades, moedas, trechos (trem/ônibus/balsa/avião)
+js/data-rotas.js     destinos diretos de cada aeroporto de saída (GERADO por npm run rotas)
+js/rotas.js     leitor da tabela de destinos da Wikipedia e atualização em segundo plano
+js/tour.js      tour guiado da primeira visita (sem biblioteca externa)
+js/consent.js   banner de cookies (LGPD), Google Consent Mode v2 e carregamento do AdSense
+js/paginas.js   preenche nome/e-mail do responsável nas páginas de texto
+privacidade.html, como-e-mantido.html   páginas de texto (rodapé); css/paginas.css, css/consent.css
+ads.txt         vendedores autorizados de anúncios (copiado para o dist/ no build)
+scripts/rotas.mjs    gera js/data-rotas.js (npm run rotas)
 js/data-pontos-*.js  pontos de interesse das cidades novas (e reforço das antigas)
 js/net.js       chamadas a APIs externas: cache no navegador (com validade) e filas por serviço
 js/cambio.js    câmbio automático (Frankfurter/BCE), spread e mini-gráficos de 90 dias
@@ -104,7 +112,15 @@ tests/          testes das funções puras (abra tests/index.html no navegador)
   só os meios disponíveis. Pares que não estão na lista são estimados: por terra, pelo caminho
   mais rápido na rede de trechos da tabela (Dijkstra); de avião, pela distância. Aparecem
   marcados como "estimativa".
+- `aeroportos` e `origemPadrao` — aeroportos de saída ("Saindo de"): sigla, cidade, nome,
+  lat/lon e a página da Wikipedia de onde saem os destinos diretos (`wikiRotas`). `voosIntl`:
+  parâmetros da estimativa do voo internacional (velocidade, conexão, volta).
 - `config`, `cambio`, `gerais` — data de saída, orçamento, câmbio e itens gerais padrão.
+
+**Rotas dos aeroportos:** rode `npm run rotas` de tempos em tempos (por exemplo, no começo de cada
+temporada). O script lê a página de cada aeroporto na Wikipedia, regrava `js/data-rotas.js` e
+mostra os destinos encontrados; confira a diferença no git antes do commit. Se uma página mudar
+de formato, ele para com erro e não grava nada.
 
 Depois de mudar valores padrão no `data.js`, use **Dados → Começar do zero** no app para
 descartar o que estava salvo no navegador.
@@ -132,8 +148,17 @@ descartar o que estava salvo no navegador.
   ALL, MKD, MDL) ficam manuais; a BAM é derivada do euro (paridade fixa).
 - **Passagens aéreas:** clique em um país no mapa (ou veja o painel da cidade) para abrir buscas
   já preenchidas no Google Flights, Skyscanner e Kayak — da cidade anterior do roteiro até a
-  cidade daquele país, na data de chegada (e a volta para Campinas, na última cidade). Não usa
+  cidade daquele país, na data de chegada (e a volta para o Brasil, na última cidade). Não usa
   API nem chave: os preços aparecem no site de cada buscador.
+- **Saindo de:** no topo de *Meu roteiro*, escolha o aeroporto de saída entre 13 aeroportos
+  internacionais do Brasil (padrão: Campinas – VCP). Ele muda a ida e a volta, a linha no mapa,
+  a rota inteligente sem pontas fixas (a rota começa e termina nele) e as buscas de passagens.
+  Os destinos com **voo direto** vêm da tabela "Airlines and destinations" da página do aeroporto
+  na Wikipedia: o site já traz uma cópia (`js/data-rotas.js`) e, ao escolher o aeroporto, busca a
+  versão atual dele em segundo plano (guardada no navegador por 30 dias; se falhar, fica a cópia).
+  Destino fora da lista aparece "com conexão", com a sugestão do aeroporto de conexão (o destino
+  direto que dá o menor caminho). Os tempos de voo são **estimados pela distância**. Cada cenário
+  guarda o seu aeroporto; links e roteiros antigos abrem com Campinas.
 - **Hospedagem:** no painel da cidade, buscas no Airbnb e no Booking com as datas de entrada e
   saída, e a página de hostels do Hostelworld. Em "Minha hospedagem", marque o local clicando no
   mapa ou colando um link do Google Maps (ou "latitude, longitude"); as distâncias e o tempo a pé
@@ -298,6 +323,36 @@ Precisa do Worker de links curtos (abaixo) com o código atual de `worker/roteir
 - O KV da Cloudflare pode levar até ~1 minuto para mostrar uma mudança em outra região do mundo; entre pessoas no mesmo país costuma ser imediato. Cada mudança salva conta como 1 gravação (o plano grátis permite 1.000 por dia).
 - Criar o link de edição pede o CAPTCHA; os salvamentos não, mas o Worker aceita no máximo 30 por minuto de cada pessoa (IP) em cada roteiro. Acima disso a barra mostra **muitas mudanças, aguardando…** e o app tenta de novo sozinho.
 
+### Tour guiado
+
+Na primeira visita, depois da escolha de cookies, o app oferece um tour (**Fazer o tour** ou **Pular**)
+com 12 passos: aeroporto de saída, cidades, noites e rota inteligente, trecho entre cidades, passeios,
+valores, bate-volta, hospedagem, passagens, reservas, total/linha do tempo/comparativo e compartilhar.
+Cada passo escurece a tela e destaca a parte certa; os passos interativos avançam sozinhos quando você
+faz a ação (ou o **Próximo** faz por você). "Pular tour" e `Esc` funcionam em qualquer passo. O exemplo
+(Londres → Paris, com Liverpool como bate-volta) fica num cenário separado; no fim, **Ficar com este
+roteiro** ou **Começar do zero** (o roteiro anterior volta). Se a página fechar no meio, o exemplo é
+desfeito na próxima visita. Para refazer: **Dados → Rever o tour** (`js/tour.js`).
+
+### Privacidade, cookies e anúncios
+
+- Na primeira visita, um banner no rodapé pergunta o que a pessoa permite: **Aceitar**, **Recusar**
+  ou **Configurar** (os três com o mesmo destaque). Categorias: Necessários (sempre ligados),
+  Anúncios e Medição. A escolha fica no navegador, com data, e pode ser mudada em **Dados →
+  Privacidade e cookies** ou no link **Cookies** do rodapé.
+- **Google Consent Mode v2**: tudo começa "negado"; depois da escolha, o app envia a atualização.
+  Nenhum script de anúncio ou de medição carrega antes do aceite.
+- **Anúncios (AdSense)**: preencha `adsenseCliente` no `DATA.config` (`ca-pub-…`) depois de aprovado e
+  troque a linha comentada do `ads.txt`. Para quem está na Europa (EEE, Reino Unido, Suíça), ligue a
+  mensagem de consentimento do próprio Google (AdSense → Privacidade e mensagens): o site detecta e não
+  mostra o banner próprio. O espaço do anúncio fica no fim da lateral (fora do mapa) e só aparece com
+  anúncios carregados.
+- **Páginas**: `privacidade.html` e `como-e-mantido.html` (links no rodapé do mapa, no banner e na aba
+  Dados). Nome e e-mail do responsável vêm de `responsavel` no `DATA.config`; a validade dos links
+  curtos, de `linkCurtoValidadeDias` (mantenha igual ao `TTL_DIAS` do Worker).
+- **Links de parceiros**: perto dos botões de busca aparece "Buscas em sites parceiros · como isso mantém
+  o site gratuito" (`avisoParceiros` no `DATA.config`).
+
 ## APIs externas
 
 Todas são gratuitas, sem chave e chamadas direto do navegador. As respostas ficam guardadas no
@@ -313,6 +368,7 @@ guardado ou mostra um aviso discreto. Nenhuma chave de API fica no código do si
 | Horários reais de trem | [Transitous](https://transitous.org) | 24 h |
 | Fotos, lugares próximos e popularidade | Wikipedia / Wikimedia | 30 dias |
 | QR code do link de compartilhamento | biblioteca `qrcode-generator@1.4.4` (jsDelivr), carregada só ao abrir a janela | — |
+| Voos diretos do aeroporto de saída | Wikipedia (tabela "Airlines and destinations"), só do aeroporto escolhido | 30 dias |
 | Jogos de futebol (opcional, desligado por padrão) | football-data.org **pelo seu Cloudflare Worker** (a chave fica no Worker) | 12 h |
 | Links curtos de compartilhamento (opcional, desligado por padrão) | **seu Cloudflare Worker** + KV (`worker/roteiro.js`) | — |
 | CAPTCHA ao gerar link curto / link de edição | Cloudflare Turnstile (`challenges.cloudflare.com`), carregado só no clique | — |

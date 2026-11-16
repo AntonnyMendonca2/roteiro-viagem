@@ -18,7 +18,7 @@
   const D = window.DATA;
   const A = () => window.App;
   const Cen = window.Cenarios = {};
-  const CAMPOS = ['dataSaida', 'cities', 'pois', 'legs', 'otim'];
+  const CAMPOS = ['dataSaida', 'origem', 'cities', 'pois', 'legs', 'otim'];   // cada cenário tem o seu aeroporto de saída
   Cen.CAMPOS = CAMPOS;
 
   /* ====================================================== retrato / restauração */

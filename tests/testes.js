@@ -928,8 +928,9 @@
   });
 
   teste('Fluxo com o Worker: cria, outro salva antes (409), mescla e envia', async () => {
-    const C = window.Colab, fetchReal = window.fetch, urlReal = D.config.linkCurtoUrl;
+    const C = window.Colab, fetchReal = window.fetch, urlReal = D.config.linkCurtoUrl, tokenReal = window.Captcha.token;
     const servidor = { v: 0, dados: null }, puts = [];
+    window.Captcha.token = () => Promise.resolve('tok');      // CAPTCHA simulado (a chave do site real está no data.js)
     D.config.linkCurtoUrl = 'https://links.teste.workers.dev';
     window.fetch = (url, o) => {
       const u = new URL(url), m = (o && o.method) || 'GET', corpo = o && o.body ? JSON.parse(o.body) : null;
@@ -961,8 +962,316 @@
     } finally {
       window.Colab._t.set(null);
       try { window.localStorage.removeItem('viagem-europa:colab'); } catch (e) { /* ok */ }
-      window.fetch = fetchReal; D.config.linkCurtoUrl = urlReal; App.refresh = refreshReal;
+      window.fetch = fetchReal; D.config.linkCurtoUrl = urlReal; App.refresh = refreshReal; window.Captcha.token = tokenReal;
     }
+  });
+
+  grupo('Aeroporto de saída');
+
+  teste('Padrão Campinas; link, cenário e edição antigos (sem origem) abrem com VCP', () => {
+    igual(T.defaults().origem, 'VCP');
+    const e = window.Compartilhar.estadoDe({ padrao: App.PADRAO, dataSaida: '2027-05-01' });
+    igual(e.origem, 'VCP', 'link sem origem');
+    const S = novoEstado(); S.origem = 'XYZ';
+    igual(T.sanitize(S).origem, 'VCP', 'sigla desconhecida');
+    const obj = window.Compartilhar.montar(novoEstado(), {});
+    ok(!('origem' in obj), 'Campinas (padrão) não vai no link');
+  });
+
+  teste('Origem diferente vai no link e volta igual', () => {
+    const S = novoEstado(); S.origem = 'REC';
+    const e = window.Compartilhar.estadoDe(window.Compartilhar.montar(S, {}));
+    igual(e.origem, 'REC');
+  });
+
+  teste('Trocar de origem recalcula os voos: direto (com companhias) ou com conexão', () => {
+    const S = novoEstado(); S.otim.auto = false;
+    S.origem = 'GRU'; App.calc = T.compute();
+    const ida = () => App.calc.legs[0], volta = () => App.calc.legs[App.calc.legs.length - 1];
+    igual(ida().key, 'vcp>londres', 'chave interna mantida');
+    ok(/^Voo direto/.test(ida().opts.aviao.desc), 'GRU → Londres: ' + ida().opts.aviao.desc);
+    const hDireto = ida().opts.aviao.h[1];
+    S.origem = 'REC'; App.calc = T.compute();
+    ok(/^Com conexão \(sugestão: via (Lisboa|Porto|Madri)\)/.test(ida().opts.aviao.desc), 'REC → Londres: ' + ida().opts.aviao.desc);
+    ok(ida().opts.aviao.via && ida().opts.aviao.via.nome, 'linha da ida passa pela conexão');
+    ok(volta().opts.aviao.h[0] > 0, 'volta calculada');
+    S.origem = 'GRU'; App.calc = T.compute();
+    const vGru = App.vooIntl('lisboa', true, 'GRU'), vRec = App.vooIntl('lisboa', true, 'REC');
+    ok(vRec.medio < vGru.medio, 'Recife → Lisboa mais curto que Guarulhos → Lisboa');
+    ok(hDireto < App.vooIntl('londres', true, 'REC').h[1], 'conexão leva mais tempo');
+    ok(App.vooIntl('lisboa', false, 'GRU').medio > vGru.medio, 'volta um pouco mais longa');
+  });
+
+  teste('Links de busca de passagens usam a sigla do aeroporto escolhido', () => {
+    const S = novoEstado(); S.origem = 'FOR';
+    const ls = window.UI.linksVoo('vcp', 'paris', new Date(2027, 4, 1));
+    ok(ls.every(l => /FOR|for\//.test(l.url) && !/VCP/i.test(l.url)), ls.map(l => l.url).join(' '));
+    igual(App.origem().nomeCurto, 'Fortaleza (FOR)');
+  });
+
+  teste('Rota inteligente sem pontas fixas, saindo do Nordeste: Lisboa numa das pontas', () => {
+    const S = novoEstado();
+    S.origem = 'REC'; S.otim.fixarPontas = false; S.otim.criterio = 'distancia';
+    const r = App.optimize(['praga', 'paris', 'lisboa', 'berlim']);
+    ok(r[0] === 'lisboa' || r[r.length - 1] === 'lisboa', r.join(' → '));
+    S.origem = 'MAO';
+    const custoMao = T.routeCost(r, 'distancia');
+    S.origem = 'REC';
+    ok(T.routeCost(r, 'distancia') < custoMao, 'a distância da rota muda com a origem');
+  });
+
+  teste('Cada cenário guarda o seu aeroporto (cenário antigo abre com VCP)', () => {
+    const C = window.Cenarios, S = novoEstado(); S.origem = 'GIG';
+    igual(C.retrato(S).origem, 'GIG');
+    C.restaurar(S, {});
+    igual(S.origem, 'VCP', 'retrato sem origem');
+  });
+
+  // Trecho no formato das páginas de aeroporto da Wikipedia (as duas variações de linha).
+  const WIKI_EXEMPLO = [
+    'Intro.', '==Airlines and destinations==', '===Passenger===', '{{Airport-dest-list',
+    '|[[TAP Air Portugal]] | [[Lisbon Airport|Lisbon]],<ref name="x">{{cite web|title=a}}</ref> [[Porto Airport|Porto]]<ref name="x"/>',
+    '<!-- -->',
+    '|{{nowrap|[[Swiss International Air Lines]]}} | [[Ezeiza International Airport|Buenos Aires–Ezeiza]], [[Zurich Airport|Zürich]]',
+    '<!-- -->',
+    "| [[Air France]] | [[Charles de Gaulle Airport|Paris–Charles de Gaulle]] <br>'''Seasonal:''' [[Nice Côte d'Azur Airport|Nice]]",
+    '<!-- -->',
+    "| [[Azul Brazilian Airlines]] | [[Salgado Filho Porto Alegre International Airport|Porto Alegre]] <br>'''Charter:''' [[Madrid–Barajas Airport|Madrid]]",
+    '}}', '===Cargo===', '{{Airport-dest-list', '| [[Lufthansa Cargo]] | [[Frankfurt Airport|Frankfurt]]', '}}', '==Statistics=='
+  ].join('\n');
+
+  teste('Leitor da Wikipedia: passageiros, companhias, sazonal; ignora carga, fretamento e cidades fora do app', () => {
+    const r = window.Rotas.extrair(WIKI_EXEMPLO);
+    igual(Object.keys(r).sort(), ['lisboa', 'nice', 'paris', 'porto', 'zurique']);
+    igual(r.lisboa, { cias: ['TAP Air Portugal'], sazonal: false });
+    igual(r.zurique.cias, ['Swiss International Air Lines'], 'companhia dentro de {{nowrap}}');
+    ok(r.nice.sazonal && !r.paris.sazonal, 'sazonal');
+    let erro = '';
+    try { window.Rotas.extrair('página sem a tabela'); } catch (e) { erro = e.message; }
+    ok(/não encontrada/.test(erro), 'formato mudou → erro: ' + erro);
+  });
+
+  teste('Busca em segundo plano: usa a Wikipedia se der certo; se falhar, fica a cópia do site', async () => {
+    const N = window.Net, fetchReal = window.fetch, limpar = () => ['rotas:NAT', 'rotas:NAT:falha'].forEach(k => N.cacheDel(k));
+    limpar();
+    let chamadas = 0;
+    try {
+      ok(window.Rotas.de('NAT') && window.Rotas.de('NAT').fonte === 'site', 'cópia do site');
+      window.fetch = () => { chamadas++; return Promise.reject(new TypeError('Failed to fetch')); };
+      igual(await window.Rotas.atualizar('NAT'), false, 'falha não muda nada');
+      igual(window.Rotas.de('NAT').fonte, 'site', 'continua a cópia');
+      await window.Rotas.atualizar('NAT');
+      igual(chamadas, 1, 'depois de uma falha, só tenta de novo no dia seguinte');
+      limpar();
+      window.fetch = () => { chamadas++; return Promise.resolve(new Response(JSON.stringify({ parse: { wikitext: WIKI_EXEMPLO } }), { status: 200 })); };
+      igual(await window.Rotas.atualizar('NAT'), true, 'trouxe algo diferente');
+      const r = window.Rotas.de('NAT');
+      igual([r.fonte, Object.keys(r.destinos).length], ['wikipedia', 5]);
+      igual(await window.Rotas.atualizar('NAT'), false, 'guardado por 30 dias: não busca de novo');
+      igual(chamadas, 2);
+    } finally { window.fetch = fetchReal; limpar(); }
+  });
+
+  grupo('Privacidade e consentimento');
+
+  // Roda fn com o consentimento zerado; restaura a configuração e remove o que o teste criar.
+  async function semEscolha(fn, adsense) {
+    const C = window.Consent, adsReal = D.config.adsenseCliente, tcf = window.__tcfapi;
+    C._t.limpar(); D.config.adsenseCliente = adsense || '';
+    try { return await fn(C); } finally {
+      C._t.limpar(); C.fechar(); D.config.adsenseCliente = adsReal;
+      if (tcf === undefined) delete window.__tcfapi; else window.__tcfapi = tcf;
+      document.querySelectorAll('script[src*="adsbygoogle"]').forEach(s => s.remove());
+      document.body.classList.remove('com-anuncios');
+    }
+  }
+  const ultimoConsent = () => { const l = window.dataLayer.filter(a => a && a[0] === 'consent'); return l[l.length - 1]; };
+
+  teste('Consent Mode v2: tudo negado antes de qualquer escolha', () => {
+    const def = window.dataLayer.find(a => a && a[0] === 'consent' && a[1] === 'default');
+    ok(def, 'sem consent default');
+    igual([def[2].ad_storage, def[2].ad_user_data, def[2].ad_personalization, def[2].analytics_storage], ['denied', 'denied', 'denied', 'denied']);
+  });
+
+  teste('Primeira visita: banner com Aceitar, Recusar e Configurar com o mesmo destaque', async () => {
+    await semEscolha(C => {
+      ok(!C.decidido(), 'não deveria estar decidido');
+      C.iniciar();
+      const el = document.getElementById('consent'), bts = [...el.querySelectorAll('.cs-btns button')];
+      igual(bts.map(b => b.textContent), ['Aceitar', 'Recusar', 'Configurar']);
+      ok(bts.every(b => b.className === bts[0].className), 'classes diferentes: ' + bts.map(b => b.className).join(' | '));
+      ok(/privacidade\.html/.test(el.innerHTML), 'link para a página Privacidade');
+    });
+  });
+
+  teste('Recusar: salva com data, nega no Consent Mode e não carrega anúncio (mesmo com AdSense ligado)', async () => {
+    await semEscolha(C => {
+      C.iniciar();
+      document.querySelector('#consent [data-cs="recusar"]').click();
+      const d = C.ler();
+      ok(d && !d.anuncios && !d.medicao && /^\d{4}-\d{2}-\d{2}T/.test(d.data), JSON.stringify(d));
+      ok(!C.aberto(), 'banner fechou');
+      igual(ultimoConsent()[2].ad_storage, 'denied');
+      ok(!document.querySelector('script[src*="adsbygoogle"]') && !C.anunciosCarregados(), 'carregou anúncio');
+    }, 'ca-pub-1234567890123456');
+  });
+
+  teste('Aceitar: concede e só então carrega o AdSense (se configurado)', async () => {
+    await semEscolha(C => {
+      C.iniciar();
+      ok(!document.querySelector('script[src*="adsbygoogle"]'), 'anúncio antes do aceite');
+      C.aceitar();
+      igual([ultimoConsent()[2].ad_storage, ultimoConsent()[2].analytics_storage], ['granted', 'granted']);
+      const s = document.querySelector('script[src*="adsbygoogle"]');
+      ok(s && /client=ca-pub-1234567890123456/.test(s.src), 'script do AdSense');
+      ok(document.body.classList.contains('com-anuncios'), 'espaço de anúncio liberado');
+    }, 'ca-pub-1234567890123456');
+    await semEscolha(C => { C.aceitar(); ok(!document.querySelector('script[src*="adsbygoogle"]'), 'sem AdSense configurado não carrega nada'); });
+  });
+
+  teste('Configurar: escolha por categoria e editável depois', async () => {
+    await semEscolha(C => {
+      C.abrir('config');
+      const caixa = document.getElementById('consent');
+      ok(caixa.querySelector('[data-cs-cat="necessarios"]').disabled, 'necessários sempre ligados');
+      caixa.querySelector('[data-cs-cat="medicao"]').checked = true;
+      caixa.querySelector('[data-cs="salvar"]').click();
+      igual([C.permitido('anuncios'), C.permitido('medicao'), C.permitido('necessarios')], [false, true, true]);
+      C.abrir('config');
+      ok(document.querySelector('#consent [data-cs-cat="medicao"]').checked, 'reabre com a escolha salva');
+      ok(/medição/.test(C.resumo()), C.resumo());
+    });
+  });
+
+  teste('Europa com AdSense: a mensagem do Google cuida (sem o nosso banner); sem AdSense, nosso banner', async () => {
+    await semEscolha(C => {
+      window.__tcfapi = function () {};
+      ok(C.googleCuida() && C.decidido(), 'Google cuida');
+      C.iniciar();
+      ok(!C.aberto(), 'nosso banner não deveria aparecer');
+    }, 'ca-pub-1234567890123456');
+    await semEscolha(C => {
+      window.__tcfapi = function () {};
+      ok(!C.googleCuida(), 'sem AdSense, o banner daqui vale para todos');
+    });
+  });
+
+  teste('Aviso de parceiros: link para "Como o site é mantido"; some quando desligado', () => {
+    ok(/como-e-mantido\.html/.test(window.UI.avisoParceiros()), window.UI.avisoParceiros());
+    const real = D.config.avisoParceiros;
+    D.config.avisoParceiros = false;
+    try { igual(window.UI.avisoParceiros(), ''); } finally { D.config.avisoParceiros = real; }
+  });
+
+  grupo('Tour guiado');
+
+  // Roda fn com o tour "nunca visto" e um roteiro de referência; desfaz tudo no fim.
+  async function comTour(fn) {
+    const Tr = window.Tour, refreshReal = App.refresh, LS = Tr._t.LS;
+    let lsReal = null;
+    try { lsReal = localStorage.getItem(LS); localStorage.removeItem(LS); } catch (e) { /* ok */ }
+    App.refresh = () => { App.calc = T.compute(); };
+    const S = novoEstado(); App.calc = T.compute();
+    try { return await fn(Tr, S); } finally {
+      if (Tr.ativo()) Tr._t.encerrar(false);
+      App.refresh = refreshReal;
+      try { if (lsReal == null) localStorage.removeItem(LS); else localStorage.setItem(LS, lsReal); } catch (e) { /* ok */ }
+    }
+  }
+  const esperar = ms => new Promise(r => setTimeout(r, ms));
+  const ate = async (Tr, id) => { for (let k = 0; k < 20 && Tr.passo() !== id; k++) Tr._t.acao('proximo'); igual(Tr.passo(), id, 'chegar ao passo'); };
+
+  teste('13 passos (boas-vindas + 12), com "Saindo de"; os textos não citam parceiros', () => {
+    const ps = window.Tour.passos;
+    igual(ps.length, 13);
+    igual([ps[0].id, ps[1].id, ps[ps.length - 1].id], ['inicio', 'origem', 'fim']);
+    ok(ps.every(p => !/parceir|afiliad|comiss/i.test(p.titulo + ' ' + p.texto)), 'texto cita parceiros');
+    ok(ps.filter(p => p.pronto && p.fazer).length >= 4, 'passos interativos');
+  });
+
+  teste('Só na primeira visita; não durante roteiro compartilhado', async () => {
+    await comTour(Tr => {
+      ok(Tr.deveMostrar(), 'primeira visita');
+      App.somenteLeitura = true;
+      try { ok(!Tr.deveMostrar(), 'modo leitura'); } finally { App.somenteLeitura = false; }
+      localStorage.setItem(Tr._t.LS, 'visto');
+      ok(!Tr.deveMostrar(), 'já visto');
+    });
+  });
+
+  teste('"Fazer o tour" usa um cenário de exemplo; "Pular" devolve o roteiro e não aparece de novo', async () => {
+    await comTour((Tr, S) => {
+      const antes = S.cenarioAtivo, n = S.cenarios.length;
+      Tr.comecar();
+      igual(Tr.passo(), 'inicio');
+      ok(document.querySelector('#tour .tr-balao [data-tour="pular"]'), 'botão Pular');
+      Tr._t.acao('fazer');
+      igual(Tr.passo(), 'origem');
+      igual(S.cenarios.length, n + 1, 'cenário do exemplo');
+      ok(S.cenarioAtivo !== antes && App.route().length === 0, 'exemplo começa vazio');
+      ok(document.querySelector('#tour .tr-pular'), '"Pular tour" visível no passo');
+      Tr._t.acao('pular');
+      ok(!Tr.ativo() && Tr.visto(), 'encerrado e marcado');
+      igual([S.cenarioAtivo, S.cenarios.length], [antes, n], 'roteiro anterior de volta');
+      ok(S.cities.cracovia.sel, 'roteiro do usuário intacto');
+    });
+  });
+
+  teste('Passo interativo avança sozinho quando a pessoa faz a ação', async () => {
+    await comTour(async (Tr, S) => {
+      Tr.comecar(); Tr._t.acao('fazer'); Tr._t.acao('proximo');
+      igual(Tr.passo(), 'cidades');
+      S.cities.londres.sel = true; S.cities.paris.sel = true; S.cities.londres.ordem = 1; S.cities.paris.ordem = 2; App.refresh();
+      Tr._t.tick();
+      await esperar(900);
+      igual(Tr.passo(), 'noites');
+    });
+  });
+
+  teste('"Próximo" faz a ação por ela (cidades, avião, Torre Eiffel, bate-volta) e "Ficar com este roteiro" guarda', async () => {
+    await comTour(async (Tr, S) => {
+      Tr.comecar(); Tr._t.acao('fazer');
+      await ate(Tr, 'fim');
+      const st = App.state;
+      igual(App.route().sort(), ['londres', 'paris'], 'Londres e Paris');
+      ok(st.pois['torre-eiffel'].sel, 'Torre Eiffel');
+      igual(App.bvBase('liverpool', st), 'londres', 'Liverpool como bate-volta');
+      const l = App.calc.legs.find(x => !x.intl && ((x.from === 'londres' && x.to === 'paris') || (x.from === 'paris' && x.to === 'londres')));
+      igual(l && l.modo, 'aviao', 'trecho de avião ' + JSON.stringify(App.calc.legs.map(x => [x.from, x.to, x.modo, x.intl])));
+      Tr._t.acao('ficar');
+      const c = st.cenarios.find(x => x.id === st.cenarioAtivo);
+      igual(c.nome, 'Roteiro do tour');
+      ok(Tr.visto(), 'marcado como visto');
+    });
+  });
+
+  teste('Página fechada no meio do tour: na próxima visita o exemplo some e o roteiro anterior volta', async () => {
+    await comTour(async (Tr, S) => {
+      const antes = S.cenarioAtivo, n = S.cenarios.length;
+      // como se a visita anterior tivesse criado o exemplo e fechado a página
+      const c = window.Cenarios.criar('Tour (exemplo)', {});
+      window.Cenarios.ativar(S, c.id);
+      localStorage.setItem(Tr._t.LS_ANDAMENTO, JSON.stringify({ exemplo: c.id, anterior: antes }));
+      ok(Tr.limparSobra(), 'havia sobra');
+      igual([S.cenarioAtivo, S.cenarios.length], [antes, n]);
+      ok(S.cities.cracovia.sel, 'roteiro anterior');
+      ok(!localStorage.getItem(Tr._t.LS_ANDAMENTO), 'andamento apagado');
+    });
+  });
+
+  teste('"Começar do zero" apaga o exemplo e devolve o roteiro anterior; Esc pula em qualquer passo', async () => {
+    await comTour(async (Tr, S) => {
+      const antes = S.cenarioAtivo, n = S.cenarios.length;
+      Tr.comecar(); Tr._t.acao('fazer'); await ate(Tr, 'fim');
+      Tr._t.acao('zero');
+      igual([App.state.cenarioAtivo, App.state.cenarios.length], [antes, n]);
+      ok(App.state.cities.cracovia.sel, 'roteiro anterior');
+      localStorage.removeItem(Tr._t.LS);
+      Tr.comecar(); Tr._t.acao('fazer'); Tr._t.acao('proximo'); Tr._t.acao('proximo');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      ok(!Tr.ativo(), 'Esc pulou');
+      igual(App.state.cenarios.length, n, 'exemplo removido');
+    });
   });
 
   grupo('Links curtos');

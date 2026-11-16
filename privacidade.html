@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0e0e0e">
+  <title>Privacidade — Mapa da Viagem</title>
+  <meta name="description" content="Como o Mapa da Viagem trata os seus dados: o que fica no navegador, o que vai para servidores, cookies, anúncios e os seus direitos (LGPD).">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230e0e0e'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23F5B841'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/paginas.css">
+  <link rel="stylesheet" href="css/consent.css">
+</head>
+<body>
+<main class="pagina">
+  <p class="voltar"><a href="./">← Voltar ao mapa</a></p>
+  <h1>Privacidade</h1>
+  <p class="atualizado">Atualizado em 16/11/2026</p>
+
+  <section class="resumo">
+    <h2>Em poucas palavras</h2>
+    <ul>
+      <li>O seu roteiro fica <b>só no seu navegador</b>. Não há cadastro nem login.</li>
+      <li>Ele vai para um servidor <b>só quando você pede</b> um link curto ou um link de edição.</li>
+      <li>Anúncios e medição de uso só funcionam <b>se você permitir</b>, e você pode mudar a escolha a qualquer momento.</li>
+      <li>Dúvidas ou pedidos: <a data-cfg-email href="mailto:antonnymendonca@gmail.com">antonnymendonca@gmail.com</a>.</li>
+    </ul>
+  </section>
+
+  <h2>Quem é o responsável</h2>
+  <p>Este site é mantido por <b data-cfg="nome">Antonny Mendonça</b>, responsável pelo tratamento dos dados
+    (o "controlador", na LGPD). Contato: <a data-cfg-email href="mailto:antonnymendonca@gmail.com">antonnymendonca@gmail.com</a>.</p>
+
+  <h2>O que fica no seu navegador</h2>
+  <p>Para funcionar, o site guarda neste navegador (no <i>localStorage</i>, uma área de armazenamento do próprio navegador):</p>
+  <ul>
+    <li>o seu roteiro: cidades, datas, pontos, valores, hospedagens, reservas e cenários;</li>
+    <li>preferências da tela e a sua escolha sobre cookies;</li>
+    <li>cópias temporárias de informações públicas (câmbio, clima, fotos, rotas de trem e de avião), para o site abrir mais rápido e funcionar sem internet.</li>
+  </ul>
+  <p>Nada disso é enviado a nós. Para apagar, use <b>Dados → Começar do zero</b> no site, ou apague os dados do site nas configurações do navegador.</p>
+
+  <h2>O que vai para um servidor (só quando você compartilha)</h2>
+  <ul>
+    <li><b>Link completo</b> (o padrão): o roteiro vai <b>dentro do próprio link</b>. Nada é guardado em servidor.</li>
+    <li><b>Link curto</b> (botão "Gerar link curto"): o roteiro, compactado, fica guardado num servidor da Cloudflare usado por este site. Ele é apagado depois de <span data-cfg="validade">5</span> dias sem uso.</li>
+    <li><b>Link de edição</b> ("Editar junto"): o roteiro fica guardado no mesmo servidor enquanto o link for usado, para que todos que têm o link vejam as mudanças. Quem tiver o link pode ver e mudar o roteiro.</li>
+  </ul>
+  <p>Se o seu roteiro tiver valores, nomes de hospedagem ou códigos de reserva, eles vão junto, a menos que você marque "Não incluir hospedagens e valores".
+    Para pedir que um link curto ou de edição seja apagado antes do prazo, mande o link para o e-mail acima.</p>
+  <p><b>Verificação anti-robô:</b> ao gerar um link curto ou de edição, o site usa o <a href="https://www.cloudflare.com/pt-br/application-services/products/turnstile/" target="_blank" rel="noopener">Cloudflare Turnstile</a>,
+    que analisa dados técnicos do navegador (sem cookies de anúncio) para diferenciar pessoas de robôs. Isso protege o servidor contra abuso.</p>
+
+  <h2>Serviços externos usados pelo site</h2>
+  <p>Para mostrar mapas, fotos, clima e câmbio, o seu navegador busca informações diretamente nestes serviços. Como em qualquer acesso à internet, eles recebem o seu <b>endereço IP</b> e dados técnicos do navegador:</p>
+  <ul class="servicos">
+    <li>Google Fonts (a fonte do site) e jsDelivr (bibliotecas do mapa e do QR code);</li>
+    <li>Esri / OpenStreetMap (mapa de ruas ao aproximar);</li>
+    <li>Wikipedia e Wikimedia (fotos, lugares próximos e rotas dos aeroportos);</li>
+    <li>Open-Meteo (clima), Frankfurter (câmbio), Transitous (horários de trem), OSRM e OpenRailRouting (caminhos a pé e trilhos);</li>
+    <li>Cloudflare (links curtos, edição em conjunto e verificação anti-robô).</li>
+  </ul>
+  <p>Os botões de busca (passagens, hospedagem, trens) abrem sites de outras empresas. Lá valem as regras de privacidade de cada uma.</p>
+
+  <h2>Cookies e escolhas</h2>
+  <p>Na primeira visita, o site pergunta o que você permite. As categorias são:</p>
+  <ul>
+    <li><b>Necessários</b> (sempre ligados): guardam o roteiro e a sua escolha neste navegador.</li>
+    <li><b>Anúncios</b>: cookies do Google e de parceiros para mostrar anúncios.</li>
+    <li><b>Medição</b>: estatísticas de uso. <i>Hoje o site não usa nenhuma ferramenta de medição.</i></li>
+  </ul>
+  <p>Nenhum script de anúncio ou de medição é carregado antes da sua permissão. Para mudar a escolha:
+    <button type="button" class="btn" data-act="cookies">Mudar escolhas de cookies</button>
+    (ou <b>Dados → Privacidade e cookies</b>, no site).</p>
+
+  <h2>Anúncios</h2>
+  <p>O site pode exibir anúncios do Google AdSense para se manter gratuito. Quando houver anúncios:</p>
+  <ul>
+    <li>Fornecedores terceiros, inclusive o Google, usam cookies para exibir anúncios com base em visitas anteriores do usuário a este site ou a outros sites.</li>
+    <li>O uso de cookies de publicidade permite que o Google e os parceiros dele exibam anúncios com base nas visitas a este site e/ou a outros sites na internet.</li>
+    <li>Você pode desativar a publicidade personalizada nas <a href="https://myadcenter.google.com/" target="_blank" rel="noopener">Configurações de anúncios do Google</a>
+      e saber mais em <a href="https://policies.google.com/technologies/partner-sites?hl=pt-BR" target="_blank" rel="noopener">Como o Google usa informações de sites que usam os serviços dele</a>.
+      Para anúncios de outras empresas, visite <a href="https://www.aboutads.info/choices/" target="_blank" rel="noopener">aboutads.info</a>.</li>
+    <li>Se você recusar os anúncios, o site não carrega o AdSense. Visitantes na Europa veem a mensagem de privacidade do próprio Google, que pergunta antes de qualquer anúncio personalizado.</li>
+  </ul>
+
+  <h2>Links de parceiros</h2>
+  <p>Alguns botões de busca podem ser links de parceiros: o site pode receber uma comissão se você reservar por eles, <b>sem custo extra para você</b>.
+    Veja <a href="como-e-mantido.html">Como o site é mantido</a>.</p>
+
+  <h2>Por que tratamos os dados (base legal)</h2>
+  <ul>
+    <li><b>Funcionamento do site e segurança</b> (guardar o roteiro, links que você pede, verificação anti-robô): interesse legítimo e execução do que você pediu (LGPD, art. 7º, V e IX).</li>
+    <li><b>Anúncios e medição</b>: o seu consentimento (LGPD, art. 7º, I), que pode ser retirado a qualquer momento.</li>
+  </ul>
+
+  <h2>Seus direitos</h2>
+  <p>Pela LGPD (art. 18), você pode pedir: confirmação de que tratamos dados seus, acesso, correção, eliminação, informação sobre com quem compartilhamos e a retirada do consentimento.
+    Como o site não tem contas, quase tudo fica no seu navegador e você mesmo controla. Para o que estiver no servidor (links curtos e de edição), escreva para
+    <a data-cfg-email href="mailto:antonnymendonca@gmail.com">antonnymendonca@gmail.com</a> com o link em questão. Respondemos em até 15 dias.
+    Você também pode reclamar à <a href="https://www.gov.br/anpd/" target="_blank" rel="noopener">ANPD</a> (Autoridade Nacional de Proteção de Dados).</p>
+
+  <h2>Mudanças nesta página</h2>
+  <p>Se esta página mudar, a data no topo será atualizada. Mudanças importantes também aparecem no site.</p>
+
+  <footer class="rodape-pag"><a href="./">Mapa da Viagem</a> · <a href="como-e-mantido.html">Como o site é mantido</a> · <button type="button" data-act="cookies">Cookies</button></footer>
+</main>
+<script type="module" src="js/paginas.js"></script>
+</body>
+</html>

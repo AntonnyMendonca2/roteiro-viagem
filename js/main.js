@@ -2,10 +2,12 @@
    anteriores colocaram em window (DATA, Net, MapView, UI, ...). */
 import './data.js';
 import './data-europa.js';
+import './data-rotas.js';
 import './data-pontos-1.js';
 import './data-pontos-2.js';
 import './data-futebol.js';
 import './net.js';
+import './rotas.js';
 import './map.js';
 import './ui.js';
 import './cambio.js';
@@ -17,8 +19,10 @@ import './descobrir.js';
 import './diaadia.js';
 import './assistente.js';
 import './cenarios.js';
+import './consent.js';
 import './captcha.js';
 import './compartilhar.js';
 import './colab.js';
+import './tour.js';
 import './futebol.js';
 import './app.js';

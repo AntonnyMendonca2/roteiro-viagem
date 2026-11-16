@@ -95,6 +95,7 @@
       v: 1,
       padrao: App.PADRAO,                       // versão do padrão (veja acima)
       dataSaida: D.config.dataSaida,
+      origem: D.origemPadrao,                   // aeroporto de saída (sigla; veja DATA.aeroportos)
       orcamento: D.config.orcamento,
       iof: !!D.config.iof,
       cambio: clone(D.cambio),
@@ -205,6 +206,7 @@
   function sanitize(s) {
     s.padrao = App.PADRAO;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.dataSaida || '')) s.dataSaida = D.config.dataSaida;
+    if (!D.aeroportos.some(a => a.iata === s.origem)) s.origem = D.origemPadrao;   // links e roteiros antigos: Campinas
     D.cities.forEach(c => {
       const cs = s.cities[c.id];
       cs.noites = Math.max(1, Math.min(60, Math.round(num(cs.noites)) || 1));
@@ -396,20 +398,63 @@
     return via;
   }
 
-  // Definição de um trecho entre dois pontos da rota ('vcp' = Viracopos), sem tocar no estado.
+  /* ------------------------------------------------ aeroporto de saída e voo internacional
+     O aeroporto escolhido em "Saindo de" é o ponto 'vcp' da rota (chave mantida: os trechos salvos
+     se chamam 'vcp>londres', 'paris>vcp'). Links e roteiros antigos não têm origem → Campinas. */
+  const aeroportoDe = iata => D.aeroportos.find(a => a.iata === iata) || D.aeroportos.find(a => a.iata === D.origemPadrao);
+  App.aeroporto = aeroportoDe;
+  App.nomeAeroporto = ap => ap.cidade + ' – ' + ap.nome + ' (' + ap.iata + ')';
+  App.origem = function () {
+    const ap = aeroportoDe(App.state && App.state.origem);
+    return { id: 'vcp', iata: ap.iata, cidade: ap.cidade, aeroporto: ap.nome, lat: ap.lat, lon: ap.lon, wiki: ap.wikiRotas,
+      nome: App.nomeAeroporto(ap), nomeCurto: ap.cidade + ' (' + ap.iata + ')' };
+  };
+
+  // Nomes curtos das companhias (como aparecem na Wikipedia → como o brasileiro fala).
+  const CIAS = { 'TAP Air Portugal': 'TAP', 'LATAM Brasil': 'LATAM', 'LATAM Airlines Brasil': 'LATAM', 'Azul Brazilian Airlines': 'Azul',
+    'Gol Linhas Aéreas': 'Gol', 'Swiss International Air Lines': 'Swiss', 'Turkish Airlines': 'Turkish', 'ITA Airways': 'ITA' };
+  const ciaCurta = n => CIAS[n] || n;
+
+  // Voo entre o aeroporto de saída e uma cidade. Duração ESTIMADA pela distância (D.voosIntl);
+  // direto se a cidade está nas rotas do aeroporto (js/rotas.js), senão com conexão no destino
+  // direto (hub) que dá o menor caminho total.  → { h: [mín, máx], desc, direto, hub, medio }
+  App.vooIntl = function (cid, ida, iata) {
+    const V = D.voosIntl, ap = aeroportoDe(iata || (App.state && App.state.origem)), c = cityById[cid];
+    const voo = km => km * V.desvio / V.kmh + V.extraH;
+    const r = window.Rotas ? window.Rotas.de(ap.iata) : null, dir = r && r.destinos[cid];
+    let h, desc, hub = null;
+    if (dir) {
+      const cias = dir.cias.map(ciaCurta).filter((x, i, a) => a.indexOf(x) === i);
+      h = voo(distKm(ap, c));
+      desc = 'Voo direto' + (cias.length ? ' (' + cias.slice(0, 3).join(', ') + ')' : '') + (dir.sazonal ? ' · sazonal' : '');
+    } else {
+      let melhor = Infinity;
+      (r ? Object.keys(r.destinos) : []).forEach(id => {
+        const b = cityById[id];
+        if (!b) return;
+        const km = distKm(ap, b) + distKm(b, c);
+        if (km < melhor) { melhor = km; hub = id; }
+      });
+      h = hub ? voo(distKm(ap, cityById[hub])) + V.conexaoH + voo(distKm(cityById[hub], c)) : voo(distKm(ap, c)) + V.conexaoH + V.extraH;
+      desc = 'Com conexão' + (hub ? ' (sugestão: via ' + cityById[hub].nome + ')' : '');
+    }
+    if (!ida) h += V.voltaH;
+    const meia = x => Math.round(x * 2) / 2;
+    return { h: [Math.max(1, meia(h - V.faixaH)), meia(h + V.faixaH)], desc, direto: !!dir, hub, medio: h };
+  };
+
+  // Definição de um trecho entre dois pontos da rota ('vcp' = aeroporto de saída), sem tocar no estado.
   function legDef(from, to) {
     let key, def, intl = false, est = false;
     if (from === 'vcp' || to === 'vcp') {
       intl = true;
       const ida = from === 'vcp', cid = ida ? to : from;
       key = ida ? 'vcp>' + cid : cid + '>vcp';
-      const listado = D.origem.voos[ida ? 'ida' : 'volta'][cid];
-      const v = listado || D.origem.voos.generico;
-      est = !listado;
+      const v = App.vooIntl(cid, ida);
+      est = true;                     // a duração do voo internacional é sempre estimada
       def = { padrao: 'aviao', trem: null, aviao: { desc: v.desc, h: v.h, eur: null, total: true } };
-      // a linha da ida passa pela cidade de conexão (via: null no voo = direto)
-      const via = v.via !== undefined ? v.via : D.origem.viaIda;
-      if (ida && via && cid !== via) def.aviao.via = { cityId: via };
+      // a linha da ida passa pela cidade da conexão
+      if (ida && v.hub && cid !== v.hub) def.aviao.via = { cityId: v.hub };
     } else {
       key = parKey(from, to);
       def = legIdx[key];
@@ -505,10 +550,10 @@
 
      Pontas da rota: por padrão a 1ª e a última cidade ficam fixas (chegada e
      saída dos voos internacionais) e só o "miolo" é reordenado. Sem pontas
-     fixas, a rota começa e termina em Viracopos.
+     fixas, a rota começa e termina no aeroporto de saída escolhido.
      ========================================================================== */
   App.CRITERIOS = { tempo: 'Menor tempo', custo: 'Menor custo', distancia: 'Menor distância' };
-  const pontoDe = id => (id === 'vcp' ? D.origem : cityById[id]);
+  const pontoDe = id => (id === 'vcp' ? App.origem() : cityById[id]);
 
   // Custo de ir de "from" até "to" segundo o critério (usa o modo trem/avião escolhido no trecho).
   function pairCost(from, to, crit) {
@@ -540,7 +585,7 @@
     return brl;
   }
 
-  // Custo total de Viracopos → cidades (na ordem) → Viracopos.
+  // Custo total do aeroporto de saída → cidades (na ordem) → aeroporto de saída.
   function routeCost(ids, crit) {
     const seq = ['vcp'].concat(ids, ['vcp']);
     let t = 0;
@@ -663,7 +708,7 @@
     normalizarBV(S);
     const route = App.route();
 
-    // trechos: Viracopos → cidades → Viracopos
+    // trechos: aeroporto de saída → cidades → aeroporto de saída
     const stops = route.length ? ['vcp'].concat(route, ['vcp']) : [];
     const legs = [];
     for (let i = 0; i < stops.length - 1; i++) legs.push(resolveLeg(stops[i], stops[i + 1]));
@@ -854,8 +899,8 @@
     });
   };
 
-  // Voos para uma cidade: da cidade anterior do roteiro (ou de Viracopos) na data de chegada;
-  // se for a última cidade, inclui também a volta para Viracopos.
+  // Voos para uma cidade: da cidade anterior do roteiro (ou do aeroporto de saída) na data de chegada;
+  // se for a última cidade, inclui também a volta para o Brasil.
   App.flightsFor = function (cityId) {
     const c = App.calc, r = c.route, i = r.indexOf(cityId), saida = App.parseDate(App.state.dataSaida);
     const legOf = (a, b) => c.legs.find(l => l.from === a && l.to === b);
@@ -892,7 +937,7 @@
   // { tipo: 'trecho'|'hosp'|'ponto', id, nome, sub, data, st, auto, res, path, cityId, prazo: 'vencido'|'perto'|'' }
   App.reservas = function () {
     const S = App.state, c = App.calc, out = [], hoje = App.parseDate(App.iso(new Date()));
-    const nomeDe = id => (id === 'vcp' ? D.origem.nomeCurto : cityById[id].nome);
+    const nomeDe = id => (id === 'vcp' ? App.origem().nomeCurto : cityById[id].nome);
     const add = (tipo, id, nome, sub, data, res, path, cityId) => {
       const st = App.resStatus(tipo, id, res);
       let prazo = '';
@@ -984,7 +1029,7 @@
     const ids = prev.concat([id]);
     renumber(S.otim.auto ? App.optimize(ids, prev) : ids);
     const r = App.route(), i = r.indexOf(id);
-    const nome = x => (x ? cityById[x].nome : D.origem.nomeCurto);
+    const nome = x => (x ? cityById[x].nome : App.origem().nomeCurto);
     return 'entre ' + nome(r[i - 1]) + ' e ' + nome(r[i + 1]);
   }
 
@@ -1082,6 +1127,22 @@
   };
 
   // Muda uma opção da rota inteligente; se estiver ligada, reordena na hora.
+  // "Saindo de": troca o aeroporto, recalcula voos e rota e busca as rotas dele na Wikipedia (em segundo plano).
+  App.setOrigem = function (iata) {
+    const S = App.state;
+    if (!D.aeroportos.some(a => a.iata === iata) || S.origem === iata) return;
+    S.origem = iata;
+    if (S.otim.auto && !S.otim.fixarPontas) renumber(App.optimize(App.route(), App.route()));
+    App.refresh();
+    atualizarRotas();
+  };
+  // Rotas do aeroporto atual: se a Wikipedia trouxer algo novo, redesenha (sem aviso).
+  function atualizarRotas() {
+    if (!window.Rotas) return;
+    const iata = App.state.origem;
+    window.Rotas.atualizar(iata).then(mudou => { if (mudou && App.state.origem === iata) App.refresh(); });
+  }
+
   App.setOtim = function (k, v) {
     const S = App.state;
     S.otim[k] = v;
@@ -1279,6 +1340,7 @@
     MapView.update();
     MapView.fitRoute(true);       // abre enquadrando o roteiro atual ("Ver Europa inteira" mostra tudo)
     MapView.loadWorld();
+    if (window.Consent) window.Consent.iniciar();   // banner de cookies (antes de tudo o que é opcional; o tour espera por ele)
     if (ganhoInicial) {
       save();
       UI.toast('Roteiro reordenado para a melhor rota: ' + UI.otimTxt(ganhoInicial, App.state.otim.criterio) + ' a menos.');
@@ -1288,8 +1350,10 @@
     window.Trilhos.carregar();
     window.Futebol.carregar();
     window.Cambio.init();   // busca as cotações (modo automático) e o histórico de 90 dias
+    atualizarRotas();                // destinos diretos do aeroporto de saída (Wikipedia, a cada 30 dias)
     window.Colab.iniciar();          // edição em conjunto salva neste navegador: volta a sincronizar
     window.Compartilhar.iniciar();   // link com #r=/#s=: modo leitura · #e=: edição em conjunto
+    if (window.Tour) window.Tour.iniciar();   // primeira visita: tour guiado (depois da escolha de cookies)
 
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape') return;

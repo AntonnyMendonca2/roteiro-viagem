@@ -113,7 +113,7 @@
 
   /* ====================================== links de busca (voos e hospedagem) */
   // Não usam API nem chave: abrem a busca já preenchida no site de cada empresa.
-  const iataDe = id => (id === 'vcp' ? D.origem.iata : A().city(id).iata);
+  const iataDe = id => (id === 'vcp' ? A().origem().iata : A().city(id).iata);   // 'vcp' = aeroporto de saída escolhido
   const ext = '" target="_blank" rel="noopener noreferrer">';
 
   UI.linksVoo = function (from, to, date) {
@@ -163,6 +163,10 @@
 
   const linkBtns = list => list.map(l => '<a class="btn" href="' + esc(l.url) + ext + esc(l.nome) + ' ↗</a>').join('');
 
+  // Uma linha discreta perto dos botões de busca (uma vez por bloco, não em cada botão).
+  UI.avisoParceiros = () => (D.config.avisoParceiros
+    ? '<p class="parceiros">Buscas em sites parceiros · <a href="como-e-mantido.html" target="_blank" rel="noopener">como isso mantém o site gratuito</a></p>' : '');
+
   // Linhas de voo para uma cidade (trecho de chegada e, se for a última, a volta).
   UI.flightRows = function (cityId) {
     return A().flightsFor(cityId).map(f => {
@@ -188,7 +192,7 @@
       (area ? '<p class="alert forte">' + esc(area.aviso) + '</p><p class="muted">Este país aparece no mapa só como referência: não pode ser incluído no roteiro.</p>'
         : lista.length
         ? lista.map(c => UI.flightRows(c.id)).join('') +
-          '<p class="muted">Os preços aparecem no site de cada buscador. Datas e cidades vêm do seu roteiro.</p>'
+          '<p class="muted">Os preços aparecem no site de cada buscador. Datas e cidades vêm do seu roteiro.</p>' + UI.avisoParceiros()
         : '<p class="muted">Nenhuma cidade deste país está cadastrada no roteiro.</p>');
     const w = Math.min(340, window.innerWidth - 24);
     card.style.width = w + 'px';
@@ -244,7 +248,7 @@
     let html = '<h4>Hospedagem</h4>' +
       '<p class="ref">' + (seg ? 'Busca de ' + Fmt.data(seg.start) + ' a ' + Fmt.data(seg.end) + ' · ' : 'Sem datas (cidade fora do roteiro) · ') +
       (D.config.viajantes || 1) + ((D.config.viajantes || 1) > 1 ? ' pessoas' : ' pessoa') + '</p>' +
-      '<div class="links tight">' + linkBtns(UI.linksHosp(c, seg)) + '</div>';
+      '<div class="links tight">' + linkBtns(UI.linksHosp(c, seg)) + '</div>' + UI.avisoParceiros();
     if (!cs.sel) return html;
     if (seg) html += resRow('hosp', c.id, cs.res, 'cities.' + c.id + '.res', 'Reserva');
     html += '<div class="hosp-box"><div class="field"><label for="f-hn-' + c.id + '">Minha hospedagem <small>nome ou endereço</small></label>' +
@@ -269,7 +273,7 @@
   }
 
   /* ============================================================ textos de trecho */
-  const nomeDe = id => (id === 'vcp' ? D.origem.nomeCurto : A().city(id).nome);
+  const nomeDe = id => (id === 'vcp' ? A().origem().nomeCurto : A().city(id).nome);
 
   // Texto de um trecho em um modo (usado no painel e no hover do mapa).
   UI.legText = function (leg, modo) {
@@ -320,6 +324,7 @@
   /* -------------------------------------------------------------------- eventos */
   function bind() {
     // cliques (delegação por data-act)
+    document.addEventListener('consentimento', () => UI.renderAll());   // aba Dados mostra a escolha nova (js/consent.js)
     document.addEventListener('click', e => {
       const t = e.target.closest('[data-act]');
       if (!t) return;
@@ -361,6 +366,8 @@
         case 'export': App.exportJSON(); break;
         case 'import': els.file.value = ''; els.file.click(); break;
         case 'reset': App.reset(); break;
+        case 'cookies': if (window.Consent) window.Consent.abrir('config'); break;
+        case 'tour': if (window.Tour) window.Tour.comecar(); break;
         case 'optimize': App.optimizeNow(); break;
         case 'fc-close': UI.hideCountryCard(); break;
         case 'hosp-pick': App.pickHosp(id); break;
@@ -396,6 +403,7 @@
     els.sidebar.addEventListener('change', e => {
       const t = e.target;
       if (t.dataset.otim) { A().setOtim(t.dataset.otim, t.type === 'checkbox' ? t.checked : t.value); return; }
+      if ('origem' in t.dataset) { A().setOrigem(t.value); return; }
       if (t.dataset.bvBase) { if (t.value) A().setBV(t.dataset.bvBase, t.value); return; }
       if (!t.dataset.path) return;
       if ('link' in t.dataset) { A().set(t.dataset.path, UI.limparLink(t.value)); A().refresh(); return; }
@@ -473,6 +481,10 @@
     if (document.body.classList.contains('drawer-open') === open) return;
     document.body.classList.toggle('drawer-open', open);
   }
+  // Para o tour (js/tour.js): abre/fecha a gaveta do celular e troca de aba.
+  UI.abrirGaveta = open => openDrawer(!!open);
+  UI.aba = () => tab;
+  UI.irAba = function (t) { if (tab === t) return; tab = t; A().closeDetail(); renderTabs(); };
 
   // Celular: arrastar a gaveta. Pela alça/resumo, para cima abre e para baixo fecha;
   // com o conteúdo no topo, puxar para baixo também fecha (padrão das "bottom sheets").
@@ -889,16 +901,28 @@
     return h;
   }
 
+  // "Saindo de": aeroporto de saída (muda voos, rota inteligente e buscas de passagem).
+  function origemBox(S) {
+    const r = window.Rotas ? window.Rotas.de(S.origem) : null, n = r ? Object.keys(r.destinos).length : 0;
+    const quando = r && r.data ? r.data.split('-').reverse().join('/') : '';
+    return '<div class="field inline origem"><label for="f-origem">Saindo de</label>' +
+      '<select id="f-origem" data-fid="f-origem" data-origem aria-describedby="origem-info">' +
+      D.aeroportos.map(a => '<option value="' + a.iata + '"' + (a.iata === S.origem ? ' selected' : '') + '>' + esc(A().nomeAeroporto(a)) + '</option>').join('') +
+      '</select></div>' +
+      '<p id="origem-info" class="muted origem-info">' + (n ? n + (n === 1 ? ' cidade' : ' cidades') + ' do mapa com voo direto' : 'Nenhuma cidade do mapa com voo direto: todos os voos com conexão') +
+      ' · rotas da Wikipedia' + (quando ? ' de ' + quando : '') + '; tempos de voo estimados. Confira na busca de passagens.</p>';
+  }
+
   function viewRoteiro() {
     const App = A(), S = App.state, c = App.calc;
     const ida = c.segs[0], volta = c.segs[c.segs.length - 1];
-    let html = '<div class="field inline"><label for="f-saida">Data de saída</label>' +
+    let html = origemBox(S) + '<div class="field inline"><label for="f-saida">Data de saída</label>' +
       '<input id="f-saida" data-fid="f-saida" type="date" data-full data-path="dataSaida" value="' + esc(S.dataSaida) + '"></div>';
 
     html += resBox();
     html += smartBox();
     html += '<ol class="itin">';
-    html += '<li class="node">' + icon('aviao') + '<div><b>' + esc(D.origem.nome) + '</b><small>saída ' + Fmt.dow(ida.start) + ', ' + Fmt.data(ida.start) + '</small></div></li>';
+    html += '<li class="node">' + icon('aviao') + '<div><b>' + esc(App.origem().nome) + '</b><small>saída ' + Fmt.dow(ida.start) + ', ' + Fmt.data(ida.start) + '</small></div></li>';
     c.route.forEach((id, i) => {
       const city = App.city(id), seg = c.segByCity[id], n = S.cities[id].noites;
       html += legCard(c.legs[i]);
@@ -921,8 +945,9 @@
     });
     if (c.route.length) html += legCard(c.legs[c.legs.length - 1]);
     else html += '<li class="empty">Nenhuma cidade no roteiro. Inclua uma abaixo ou clique em uma cidade no mapa.</li>';
-    html += '<li class="node">' + icon('aviao') + '<div><b>' + esc(D.origem.nome) + '</b><small>volta ' + Fmt.dow(volta.start) + ', ' + Fmt.data(volta.start) + '</small></div></li>';
+    html += '<li class="node">' + icon('aviao') + '<div><b>' + esc(App.origem().nome) + '</b><small>volta ' + Fmt.dow(volta.start) + ', ' + Fmt.data(volta.start) + '</small></div></li>';
     html += '</ol>';
+    if (c.route.length) html += UI.avisoParceiros();      // botões de passagens e trens dos trechos acima
 
     const fora = D.cities.filter(ci => !S.cities[ci.id].sel);
     if (fora.length) {
@@ -963,6 +988,14 @@
       '<h4>Rotas dos trens</h4>' +
       '<p class="muted">O traçado real das ferrovias é buscado aos poucos, só para os trechos do seu roteiro, e fica guardado neste navegador. Para ter tudo disponível sem internet, pré-carregue todos os trechos de trem da tabela (leva uns 2 minutos).</p>' +
       '<div class="btn-col"><button type="button" class="btn" data-act="rail-preload">Pré-carregar rotas dos trens</button></div>' +
+      '<h4>Tour do site</h4>' +
+      '<p class="muted">Um passeio rápido pelo que o site faz, com um roteiro de exemplo num cenário separado (o seu roteiro não muda).</p>' +
+      '<div class="btn-col"><button type="button" class="btn" data-act="tour">Rever o tour</button></div>' +
+      '<h4>Privacidade e cookies</h4>' +
+      '<p class="muted">' + esc(window.Consent ? window.Consent.resumo() : '') + ' O roteiro fica só neste navegador; ele vai para um servidor apenas quando você gera um link curto ou de edição.</p>' +
+      '<div class="btn-col"><button type="button" class="btn" data-act="cookies">Mudar escolhas de cookies</button>' +
+      '<a class="btn" href="privacidade.html" target="_blank" rel="noopener">Privacidade ↗</a>' +
+      '<a class="btn" href="como-e-mantido.html" target="_blank" rel="noopener">Como o site é mantido ↗</a></div>' +
       '<h4>Atalhos</h4>' +
       '<p class="muted"><kbd>Esc</kbd> fecha o painel e volta ao mapa da Europa inteira. Role ou use a pinça para dar zoom; arraste para mover o mapa.</p>' +
       '<p class="muted">As fotos vêm da Wikipedia e os preços são de referência — confira nos sites oficiais antes de comprar.</p>';
@@ -994,7 +1027,7 @@
       html += '<h4>Gastos na cidade</h4>' + D.categorias.filter(k => k.id !== 'hospedagem').map(k => money(k.nome, 'cities.' + c.id + '.custos.' + k.id)).join('');
       if (!bv) html += window.Assistente.cityHtml(c);
     }
-    if (!bv) html += hospSection(c) + '<h4>Passagens aéreas</h4>' + UI.flightRows(c.id);
+    if (!bv) html += hospSection(c) + '<h4>Passagens aéreas</h4>' + UI.flightRows(c.id) + UI.avisoParceiros();
     if (cs.sel && !bv) html += bvDaquiHtml(c);
 
     html += window.DiaADia.cityHtml(c);
