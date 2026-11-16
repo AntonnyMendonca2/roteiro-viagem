@@ -9,6 +9,8 @@
        versão nova e tenta de novo — mudanças em campos diferentes não se perdem;
        no mesmo campo, vale a última a chegar;
      - a cada ~12 s (e ao voltar para a aba) busca a versão nova dos outros.
+   Criar o link de edição pede o CAPTCHA (js/captcha.js); os salvamentos não:
+   o Worker limita por IP e por roteiro (429 → espera e tenta de novo).
    Câmbio, filtros e preferências da tela continuam pessoais (não são sincronizados).
    ========================================================================== */
 (function () {
@@ -21,12 +23,12 @@
 
   const LS = 'viagem-europa:colab', LS_ANTES = 'viagem-europa:v1:antes-colab', LS_APP = 'viagem-europa:v1';
   const PESSOAL = ['cambio', 'cambioModo', 'cambioInfo', 'spread', 'iof', 'tag', 'ocultos', 'cenComparar', 'cenNoMapa'];
-  const ESPERA_MS = 1500, POLL_MS = 12000;
+  const ESPERA_MS = 1500, POLL_MS = 12000, LIMITE_MS = 20000;
   const clone = x => JSON.parse(JSON.stringify(x));
 
   let cfg = null;                 // { id, v, base }  base = JSON da última versão sincronizada
   let timer = null, poll = null, enviando = false, deNovo = false, aplicando = false;
-  Colab.status = '';              // 'ok' | 'enviando' | 'erro' | 'offline'
+  Colab.status = '';              // 'ok' | 'enviando' | 'erro' | 'offline' | 'limite'
   Colab.quando = 0;               // hora da última sincronização
 
   const url = () => { const u = String(D.config.linkCurtoUrl || '').trim().replace(/\/+$/, ''); return /^https:\/\//.test(u) ? u : ''; };
@@ -64,9 +66,10 @@
   };
 
   /* ----------------------------------------------------------- rede */
-  function pedir(metodo, query, corpo) {
+  function pedir(metodo, query, corpo, token) {
     const o = { method: metodo };
     if (corpo) { o.headers = { 'Content-Type': 'application/json' }; o.body = JSON.stringify(corpo); }
+    if (token) o.headers = Object.assign(o.headers || {}, { 'X-Turnstile': token });
     return fetch(url() + '/doc' + (query ? '?' + query : ''), o)
       .catch(() => { const e = new Error('Sem conexão com o servidor.'); e.rede = true; throw e; })
       .then(r => r.json().catch(() => ({})).then(j => ({ ok: r.ok, status: r.status, j })));
@@ -110,6 +113,7 @@
       if (r.ok) { cfg.v = r.j.v; cfg.base = s; guardar(); marcar('ok'); return; }
       if (r.status === 409 && r.j && r.j.dados) { mesclarCom(r.j.dados, r.j.v); deNovo = true; return; }
       if (r.status === 404) { perdido(); return; }
+      if (r.status === 429) { marcar('limite'); setTimeout(enviar, LIMITE_MS); return; }   // muitas mudanças seguidas
       marcar('erro'); setTimeout(enviar, 10000);
     }).catch(() => { marcar('offline'); setTimeout(enviar, 10000); })
       .then(() => { enviando = false; if (deNovo) { deNovo = false; enviar(); } });
@@ -157,11 +161,11 @@
   }
 
   /* ----------------------------------------------------------- ações */
-  // Começa a editar junto a partir do roteiro atual.
-  Colab.criar = function () {
+  // Começa a editar junto a partir do roteiro atual (com CAPTCHA; el: onde a caixa aparece).
+  Colab.criar = function (el) {
     if (!Colab.disponivel()) return Promise.reject(new Error('Configure o Worker (veja "Links curtos" no README).'));
     const s = atualJSON();
-    return pedir('POST', '', { dados: JSON.parse(s) }).then(r => {
+    return Promise.resolve().then(() => window.Captcha.token(el)).then(token => pedir('POST', '', { dados: JSON.parse(s) }, token)).then(r => {
       if (!r.ok || !r.j.id) throw new Error(r.j && r.j.erro ? r.j.erro : 'o servidor respondeu ' + r.status);
       cfg = { id: r.j.id, v: r.j.v, base: s };
       guardar(); ligarPoll(); marcar('ok');
@@ -208,7 +212,7 @@
     const el = document.getElementById('colabchip');
     if (!el) return;
     if (!cfg) { el.hidden = true; el.innerHTML = ''; return; }
-    const t = { ok: 'sincronizado', enviando: 'salvando…', erro: 'erro ao salvar', offline: 'sem conexão' }[Colab.status] || 'conectando…';
+    const t = { ok: 'sincronizado', enviando: 'salvando…', erro: 'erro ao salvar', offline: 'sem conexão', limite: 'muitas mudanças, aguardando…' }[Colab.status] || 'conectando…';
     el.hidden = false;
     el.className = 'btn pill colab ' + (Colab.status || '');
     el.innerHTML = '<i aria-hidden="true"></i>Editando junto · <small>' + t + '</small>';
@@ -220,7 +224,8 @@
     if (!Colab.disponivel()) return '';
     if (!cfg) {
       return '<div class="colab-box"><h4>Editar junto</h4><p class="muted">Gera um link de <b>edição</b>: quem abrir pode mudar o roteiro, e as mudanças aparecem para todos em poucos segundos. Diferente do link acima, que só mostra.</p>' +
-        '<button type="button" class="btn sm" data-act="colab-criar">Criar link de edição</button></div>';
+        '<button type="button" class="btn sm" data-act="colab-criar">Criar link de edição</button>' +
+        '<div id="colab-captcha" class="sh-captcha" hidden></div></div>';
     }
     return '<div class="colab-box on"><h4>Editando junto</h4><p class="muted">Mande este link para quem vai editar com você. <b>Quem tiver o link pode mudar o roteiro.</b></p>' +
       '<input id="colab-link" class="sh-link" type="text" readonly value="' + esc(Colab.link()) + '" aria-label="Link de edição">' +
@@ -239,7 +244,7 @@
     const UI = window.UI;
     UI.actions['colab-criar'] = t => {
       t.disabled = true;
-      Colab.criar().then(() => { Comp().renderJanela(); UI.toast('Link de edição criado. Copie e mande para quem vai editar com você.', 6000); })
+      Colab.criar(document.getElementById('colab-captcha')).then(() => { Comp().renderJanela(); UI.toast('Link de edição criado. Copie e mande para quem vai editar com você.', 6000); })
         .catch(e => { t.disabled = false; UI.toast('Não foi possível criar o link de edição: ' + e.message, 7000); });
     };
     UI.actions['colab-copiar'] = () => copiar(Colab.link());

@@ -17,6 +17,7 @@ import './descobrir.js';
 import './diaadia.js';
 import './assistente.js';
 import './cenarios.js';
+import './captcha.js';
 import './compartilhar.js';
 import './colab.js';
 import './futebol.js';

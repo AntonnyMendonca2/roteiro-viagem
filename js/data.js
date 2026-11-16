@@ -24,7 +24,10 @@ window.DATA = {
     diaADia: { inicioH: 9, fimH: 19, chegadaH: 14, partidaH: 12, puxadoH: 10, bateVoltaLongoH: 4 },
     // links curtos (opcional): endereço do seu Cloudflare Worker (worker/roteiro.js; veja "Links curtos" no README).
     // Vazio = o roteiro vai inteiro dentro do link.
-    linkCurtoUrl: 'https://fancy-tooth-7972.antonnymendonca.workers.dev'
+    linkCurtoUrl: 'https://fancy-tooth-7972.antonnymendonca.workers.dev',
+    // CAPTCHA (Cloudflare Turnstile) ao gerar link curto e link de edição: a CHAVE DO SITE (pública).
+    // A chave secreta fica só no Worker (TURNSTILE_SECRET). Vazio = não pede CAPTCHA.
+    turnstileSiteKey: '0x4AAAAAAGEEL0lTUSCwfBiI'
   },
 
   /* ------------------------------------------------------ moedas e câmbio */

@@ -10,10 +10,12 @@
 
    <dados> = base64url do JSON só com o que difere do roteiro padrão.
 
-   Links curtos (opcional): com DATA.config.linkCurtoUrl preenchido, o "1z..."
-   fica guardado no Cloudflare Worker do usuário (worker/roteiro.js) e o link
-   leva só o código:  https://usuario.github.io/repo/#s=k7Qm2xPaB4
-   Se o Worker falhar, o link volta a ser o longo (#r=).
+   Links curtos (opcional): com DATA.config.linkCurtoUrl preenchido, o botão
+   "Gerar link curto" guarda o "1z..." no Cloudflare Worker do usuário
+   (worker/roteiro.js), depois do CAPTCHA (js/captcha.js), e o link leva só o
+   código:  https://usuario.github.io/repo/#s=k7Qm2xPaB4
+   Nada é gravado ao abrir a janela nem ao marcar opções: só no clique.
+   Se o CAPTCHA ou o Worker falharem, o link continua o longo (#r=).
    ========================================================================== */
 (function () {
   'use strict';
@@ -147,8 +149,11 @@
   Comp.temCurto = () => !!curtoUrl();
 
   // Guarda o roteiro codificado no Worker e devolve o código curto.
-  Comp.guardar = function (cod) {
-    return fetch(curtoUrl() + '/', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: cod })
+  // token: do Turnstile (js/captcha.js); o Worker recusa a gravação sem um token válido.
+  Comp.guardar = function (cod, token) {
+    const headers = { 'Content-Type': 'text/plain' };
+    if (token) headers['X-Turnstile'] = token;
+    return fetch(curtoUrl() + '/', { method: 'POST', headers, body: cod })
       .then(r => r.json().catch(() => ({})).then(j => {
         if (!r.ok || !j || !/^[A-Za-z0-9_-]{10}$/.test(j.id || '')) throw new Error(j && j.erro ? j.erro : 'o servidor respondeu ' + r.status);
         return j.id;
@@ -166,15 +171,25 @@
       }));
   };
 
-  // { url, longo, compactado, curto, erroCurto }
+  // Link completo (#r=), sem rede: { url, longo, cod, compactado, curto: false, erroCurto: '' }
   Comp.link = function (opts) {
     return Comp.codificar(Comp.montar(A().state, opts), opts).then(cod => {
-      const r = { url: base() + '#r=' + cod, compactado: cod.charAt(1) === 'z', curto: false, erroCurto: '' };
+      const r = { url: base() + '#r=' + cod, cod, compactado: cod.charAt(1) === 'z', curto: false, erroCurto: '' };
       r.longo = r.url;
-      if (!curtoUrl()) return r;
-      return Comp.guardar(cod).then(id => Object.assign(r, { url: base() + '#s=' + id, curto: true }))
-        .catch(e => Object.assign(r, { erroCurto: e && e.message ? e.message : 'falha de rede' }));
+      return r;
     });
+  };
+
+  // Troca o link de r pelo curto (#s=): CAPTCHA → grava no Worker. Nunca rejeita:
+  // se algo falhar, r continua com o link completo e r.erroCurto diz o motivo.
+  // el: onde a caixa do CAPTCHA aparece, se a Cloudflare pedir interação.
+  Comp.encurtar = function (r, el) {
+    if (!curtoUrl() || r.curto) return Promise.resolve(r);
+    r.erroCurto = '';
+    return Promise.resolve().then(() => window.Captcha.token(el))
+      .then(token => Comp.guardar(r.cod, token))
+      .then(id => Object.assign(r, { url: base() + '#s=' + id, curto: true }))
+      .catch(e => Object.assign(r, { erroCurto: e && e.message ? e.message : 'falha de rede' }));
   };
 
   /* ================================================================== mesclar */
@@ -345,39 +360,61 @@
     el.innerHTML = '<div class="fc-head"><div><div class="kicker">Compartilhar</div><h3>Link do roteiro</h3></div>' +
       '<button type="button" class="fc-x" data-act="share-close" aria-label="Fechar">×</button></div>' +
       '<p class="sh-aviso"><b>Atenção:</b> o link leva o roteiro inteiro — cidades, pontos, datas, <b>hospedagens marcadas e todos os valores</b>. Quem tiver o link vê tudo. ' +
-        (Comp.temCurto() ? 'O roteiro fica guardado no seu servidor de links (Cloudflare Worker) e o link leva só um código.' : 'Nada é enviado a servidor: os dados ficam no próprio link.') + '</p>' +
+        (Comp.temCurto() ? 'Os dados ficam no próprio link. Com <b>Gerar link curto</b>, o roteiro fica guardado no servidor de links (Cloudflare) e o link leva só um código.' : 'Nada é enviado a servidor: os dados ficam no próprio link.') + '</p>' +
       '<label class="check"><input type="checkbox" data-share-opt="privado"' + (opcoes.privado ? ' checked' : '') + '><span>Não incluir hospedagens e valores</span></label>' +
       (n > 1 ? '<label class="check"><input type="checkbox" data-share-opt="todos"' + (opcoes.todos ? ' checked' : '') + '><span>Incluir todos os cenários <small>(' + n + '; sem marcar, vai só o cenário ativo: ' + window.UI.esc(window.Cenarios.ativo().nome) + ')</small></span></label>' : '') +
       '<input id="sh-link" class="sh-link" type="text" readonly value="Gerando o link…" aria-label="Link do roteiro">' +
       '<p id="sh-tam" class="muted"></p>' +
       '<div class="sh-btns"><button type="button" class="btn sm primary" data-act="share-copy">Copiar link</button>' +
+      (Comp.temCurto() ? '<button type="button" id="sh-btn-curto" class="btn sm" data-act="share-curto" hidden>Gerar link curto</button>' : '') +
       (navigator.share ? '<button type="button" class="btn sm" data-act="share-native">Enviar…</button>' : '') + '</div>' +
+      '<div id="sh-captcha" class="sh-captcha" hidden></div>' +
       (local ? '<p class="muted">Você abriu o app direto do arquivo (<code>file://</code>): este link só funciona neste computador. Publique no GitHub Pages para mandar a outras pessoas.</p>' : '') +
       '<div id="sh-qr" class="sh-qr"></div>' + window.Colab.html();
     gerar();
   }
   Comp.renderJanela = renderJanela;
 
+  // Monta o link completo (sem rede). O curto só sai no botão "Gerar link curto".
   function gerar() {
     const meuPedido = ++pedido;
     atual = null;
+    const btn = document.getElementById('sh-btn-curto');
+    if (btn) btn.hidden = true;
     Comp.link(opcoes).then(r => {
       if (meuPedido !== pedido || !aberta) return;
       atual = r;
-      const inp = document.getElementById('sh-link'), tam = document.getElementById('sh-tam'), qr = document.getElementById('sh-qr');
-      if (!inp) return;
-      inp.value = r.url;
-      if (r.curto) tam.innerHTML = 'Link curto (' + r.url.length + ' caracteres). <button type="button" class="lnk" data-act="share-longo">Copiar o link completo</button> <small>— não depende do servidor</small>';
-      else tam.textContent = (r.erroCurto ? 'Não foi possível gerar o link curto (' + r.erroCurto + '); este é o link completo. ' : '') +
-        'Link com ' + r.url.length.toLocaleString('pt-BR') + ' caracteres' + (r.compactado ? ' (compactado)' : ' (sem compactar: este navegador não tem CompressionStream)') +
-        (r.url.length > 2000 ? '. Alguns aplicativos de mensagem cortam links muito longos — prefira “Não incluir hospedagens e valores” ou só o cenário ativo' + (Comp.temCurto() ? '' : ', ou configure os links curtos (veja o README)') + '.' : '.');
-      qr.innerHTML = '<span class="muted">Gerando o QR code…</span>';
-      carregarQr().then(lib => {
-        if (meuPedido !== pedido || !document.getElementById('sh-qr')) return;
-        const svg = Comp.qrSvg(lib, r.url);
-        qr.innerHTML = svg ? '<div class="sh-qr-img">' + svg + '</div><span class="muted">Aponte a câmera do celular para abrir o roteiro.</span>'
-          : '<span class="muted">O link ficou longo demais para um QR code. Marque “Não incluir hospedagens e valores” ou envie só o cenário ativo.</span>';
-      }).catch(() => { if (meuPedido === pedido && document.getElementById('sh-qr')) qr.innerHTML = '<span class="muted">QR code indisponível sem internet (o link acima funciona normalmente).</span>'; });
+      mostrarLink(r, meuPedido);
+    });
+  }
+
+  function mostrarLink(r, meuPedido) {
+    const inp = document.getElementById('sh-link'), tam = document.getElementById('sh-tam'), qr = document.getElementById('sh-qr'), btn = document.getElementById('sh-btn-curto');
+    if (!inp) return;
+    inp.value = r.url;
+    if (btn) { btn.hidden = r.curto; btn.disabled = false; btn.textContent = r.erroCurto ? 'Tentar o link curto de novo' : 'Gerar link curto'; }
+    if (r.curto) tam.innerHTML = 'Link curto (' + r.url.length + ' caracteres). <button type="button" class="lnk" data-act="share-longo">Copiar o link completo</button> <small>— não depende do servidor</small>';
+    else tam.textContent = (r.erroCurto ? 'Não foi possível gerar o link curto (' + r.erroCurto + '); este é o link completo. ' : '') +
+      'Link com ' + r.url.length.toLocaleString('pt-BR') + ' caracteres' + (r.compactado ? ' (compactado)' : ' (sem compactar: este navegador não tem CompressionStream)') +
+      (r.url.length > 2000 ? '. Alguns aplicativos de mensagem cortam links muito longos — prefira “Não incluir hospedagens e valores” ou só o cenário ativo' + (Comp.temCurto() ? ', ou use “Gerar link curto”' : ', ou configure os links curtos (veja o README)') + '.' : '.');
+    qr.innerHTML = '<span class="muted">Gerando o QR code…</span>';
+    carregarQr().then(lib => {
+      if (meuPedido !== pedido || !document.getElementById('sh-qr')) return;
+      const svg = Comp.qrSvg(lib, r.url);
+      qr.innerHTML = svg ? '<div class="sh-qr-img">' + svg + '</div><span class="muted">Aponte a câmera do celular para abrir o roteiro.</span>'
+        : '<span class="muted">O link ficou longo demais para um QR code. ' + (Comp.temCurto() ? 'Use “Gerar link curto”, marque' : 'Marque') + ' “Não incluir hospedagens e valores” ou envie só o cenário ativo.</span>';
+    }).catch(() => { if (meuPedido === pedido && document.getElementById('sh-qr')) qr.innerHTML = '<span class="muted">QR code indisponível sem internet (o link acima funciona normalmente).</span>'; });
+  }
+
+  // Botão "Gerar link curto": CAPTCHA + gravação no Worker, uma vez por link.
+  function encurtar(btn) {
+    if (!atual || atual.curto) return;
+    const meuPedido = pedido, r = atual;
+    if (btn) { btn.disabled = true; btn.textContent = 'Gerando…'; }
+    Comp.encurtar(r, document.getElementById('sh-captcha')).then(() => {
+      if (meuPedido !== pedido || !aberta) return;
+      mostrarLink(r, meuPedido);
+      if (r.curto) window.UI.toast('Link curto pronto. Copie e mande.');
     });
   }
 
@@ -405,6 +442,7 @@
     UI.actions['share-close'] = () => Comp.fechar();
     UI.actions['share-copy'] = () => copiar(false);
     UI.actions['share-longo'] = () => copiar(true);
+    UI.actions['share-curto'] = t => encurtar(t);
     UI.actions['share-native'] = () => {
       if (!atual || !navigator.share) return;
       navigator.share({ title: 'Roteiro de viagem', text: 'Veja o meu roteiro de viagem', url: atual.url }).catch(() => { /* cancelado pelo usuário */ });

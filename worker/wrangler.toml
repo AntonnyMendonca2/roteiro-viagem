@@ -1,0 +1,28 @@
+# Publicação do Worker de links curtos / edição em conjunto (worker/roteiro.js) com o wrangler.
+# O binding de limite (Rate limiting) não pode ser criado pelo painel da Cloudflare, só por aqui.
+#
+#   npm run worker                    → publica (na 1ª vez, o wrangler pede para entrar na conta Cloudflare)
+#   npx wrangler@4 secret put TURNSTILE_SECRET --config worker/wrangler.toml   → cadastra a chave secreta
+#
+# NADA SECRETO AQUI: a chave secreta do Turnstile vai como Secret no Worker, nunca neste arquivo.
+
+name = "fancy-tooth-7972"            # nome do Worker que já existe na sua conta (o começo do endereço *.workers.dev)
+main = "roteiro.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+# Mantém as variáveis cadastradas no painel (ALLOWED_ORIGINS, TTL_DIAS): o deploy não apaga nem muda.
+keep_vars = true
+
+# Banco dos roteiros. O id está no painel: Storage & Databases → KV → (namespace "roteiros") → ID.
+[[kv_namespaces]]
+binding = "ROTEIROS"
+id = "1597b5787e8f4c8aa8e1d3d085e4aace"
+
+# Limite dos salvamentos da edição em conjunto, por IP e por roteiro.
+# O app salva no máximo ~1 vez a cada 1,5 s; 30 por minuto sobra para uso normal.
+# O período só pode ser 10 ou 60 segundos.
+[[ratelimits]]
+name = "LIMITE_EDICAO"
+namespace_id = "7301"
+simple = { limit = 30, period = 60 }

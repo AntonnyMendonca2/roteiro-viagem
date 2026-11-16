@@ -968,17 +968,24 @@
   grupo('Links curtos');
 
   // Simula o Worker (worker/roteiro.js) trocando o fetch durante o teste.
-  async function comWorker(resposta, fn) {
-    const fetchReal = window.fetch, urlReal = D.config.linkCurtoUrl, guardado = {};
+  // captcha: o que Captcha.token devolve ('tok' = token, 'falha' = rejeita, undefined = o real).
+  async function comWorker(resposta, fn, captcha) {
+    const fetchReal = window.fetch, urlReal = D.config.linkCurtoUrl, tokenReal = window.Captcha.token, guardado = {}, pedidos = [];
     D.config.linkCurtoUrl = 'https://links.teste.workers.dev/';
+    if (captcha === 'falha') window.Captcha.token = () => Promise.reject(new Error('a verificação anti-robô falhou'));
+    else if (captcha !== undefined) window.Captcha.token = () => Promise.resolve(captcha);
     window.fetch = (url, o) => {
+      pedidos.push({ url, metodo: (o && o.method) || 'GET', headers: (o && o.headers) || {} });
       if (resposta === 'rede') return Promise.reject(new TypeError('Failed to fetch'));
-      if (o && o.method === 'POST') { guardado.k7Qm2xPaB4 = o.body; return Promise.resolve(new Response(JSON.stringify({ id: 'k7Qm2xPaB4' }), { status: 200 })); }
+      if (o && o.method === 'POST') {
+        if (resposta === '403') return Promise.resolve(new Response(JSON.stringify({ erro: 'A verificação anti-robô não foi aceita.' }), { status: 403 }));
+        guardado.k7Qm2xPaB4 = o.body; return Promise.resolve(new Response(JSON.stringify({ id: 'k7Qm2xPaB4' }), { status: 200 }));
+      }
       const id = new URL(url).searchParams.get('id');
       return Promise.resolve(guardado[id] ? new Response(JSON.stringify({ codigo: guardado[id] }), { status: 200 })
         : new Response(JSON.stringify({ erro: 'Link não encontrado.' }), { status: 404 }));
     };
-    try { return await fn(); } finally { window.fetch = fetchReal; D.config.linkCurtoUrl = urlReal; }
+    try { return await fn(pedidos); } finally { window.fetch = fetchReal; D.config.linkCurtoUrl = urlReal; window.Captcha.token = tokenReal; }
   }
 
   teste('Sem Worker configurado: link completo (#r=)', async () => {
@@ -988,32 +995,141 @@
     try {
       const r = await window.Compartilhar.link({});
       ok(/#r=1[zj]/.test(r.url), r.url.slice(-40));
-      ok(!r.curto && !r.erroCurto, 'não deveria tentar o link curto');
+      const r2 = await window.Compartilhar.encurtar(r, null);
+      ok(!r2.curto && !r2.erroCurto, 'não deveria tentar o link curto');
     } finally { D.config.linkCurtoUrl = urlReal; }
   });
 
-  teste('Com Worker: link curto (#s=) e o completo como alternativa; ida e volta', async () => {
+  teste('Montar o link não grava nada: o curto só sai em "Gerar link curto"', async () => {
+    novoEstado();
+    await comWorker('ok', async pedidos => {
+      const r = await window.Compartilhar.link({});
+      await window.Compartilhar.link({ privado: true });
+      ok(/#r=1[zj]/.test(r.url) && !r.curto, 'deveria ser o link completo');
+      igual(pedidos.length, 0, 'pedidos ao Worker');
+    }, 'tok');
+  });
+
+  teste('Com Worker: link curto (#s=) com o token do CAPTCHA; o completo como alternativa; ida e volta', async () => {
     const S = novoEstado();
     S.cities.liverpool.sel = true; S.cities.liverpool.bv = 'londres';
-    await comWorker('ok', async () => {
-      const r = await window.Compartilhar.link({});
+    await comWorker('ok', async pedidos => {
+      const r = await window.Compartilhar.encurtar(await window.Compartilhar.link({}), document.createElement('div'));
       ok(/#s=k7Qm2xPaB4$/.test(r.url), r.url);
       ok(r.curto && /#r=1[zj]/.test(r.longo), 'link completo');
+      igual(pedidos.length, 1, 'uma gravação');
+      igual(pedidos[0].headers['X-Turnstile'], 'tok-123', 'token enviado');
       const obj = await window.Compartilhar.buscar('k7Qm2xPaB4').then(window.Compartilhar.decodificar);
       const e = window.Compartilhar.estadoDe(obj);
       igual(e.cities.liverpool.bv, 'londres', 'bate-volta preservado');
       let erro = '';
       await window.Compartilhar.buscar('XXXXXXXXXX').catch(x => { erro = x.message; });
       ok(/não encontrado/.test(erro), 'erro de link inexistente: ' + erro);
+    }, 'tok-123');
+  });
+
+  teste('CAPTCHA falhou: fica o link completo, com o motivo, e nada é gravado', async () => {
+    novoEstado();
+    await comWorker('ok', async pedidos => {
+      const r = await window.Compartilhar.encurtar(await window.Compartilhar.link({}), document.createElement('div'));
+      ok(/#r=1[zj]/.test(r.url) && !r.curto, 'deveria cair no link completo');
+      ok(/anti-robô/.test(r.erroCurto), 'motivo: ' + r.erroCurto);
+      igual(pedidos.length, 0, 'pedidos ao Worker');
+    }, 'falha');
+  });
+
+  teste('Worker recusou o token (403) ou está fora do ar: volta para o link completo', async () => {
+    novoEstado();
+    for (const caso of ['403', 'rede']) {
+      await comWorker(caso, async () => {
+        const r = await window.Compartilhar.encurtar(await window.Compartilhar.link({}), document.createElement('div'));
+        ok(/#r=1[zj]/.test(r.url) && !r.curto, caso + ': deveria cair no link completo');
+        ok(r.erroCurto, caso + ': sem motivo');
+      }, 'tok');
+    }
+  });
+
+  teste('Sem chave do site: Captcha.token devolve vazio (sem carregar o Turnstile)', async () => {
+    const real = D.config.turnstileSiteKey;
+    D.config.turnstileSiteKey = '';
+    try { igual(await window.Captcha.token(null), ''); } finally { D.config.turnstileSiteKey = real; }
+  });
+
+  grupo('Worker: CAPTCHA e limite (worker/roteiro.js)');
+
+  // Roda o Worker de verdade, com KV, rate limiter e o siteverify da Cloudflare simulados.
+  // Precisa do servidor local (npm run dev): em file:// o navegador não importa módulos.
+  async function comWorkerReal(fn) {
+    let W;
+    try { W = (await import('../worker/roteiro.js')).default; } catch (e) { throw new Error('abra os testes pelo servidor local (npm run dev → /tests/) para testar o Worker'); }
+    const ORIGEM = 'https://site.teste', kv = {}, verificados = [], fetchReal = window.fetch;
+    let usos = 0;
+    const env = {
+      ALLOWED_ORIGINS: ORIGEM, TURNSTILE_SECRET: 'segredo',
+      ROTEIROS: { get: async (k, o) => (k in kv ? (o && o.type === 'json' ? JSON.parse(kv[k]) : kv[k]) : null), put: async (k, v) => { kv[k] = v; } },
+      LIMITE_EDICAO: { limit: async () => ({ success: ++usos <= 2 }) }
+    };
+    window.fetch = async (url, o) => {
+      ok(String(url).indexOf('challenges.cloudflare.com/turnstile/v0/siteverify') >= 0, 'fetch inesperado: ' + url);
+      const token = o.body.get('response');
+      verificados.push({ token, secret: o.body.get('secret') });
+      return new Response(JSON.stringify({ success: token === 'bom' }), { status: 200 });
+    };
+    const pedir = (metodo, caminho, corpo, token) => {
+      const headers = { Origin: ORIGEM, 'CF-Connecting-IP': '203.0.113.9' };
+      if (token) headers['X-Turnstile'] = token;
+      // objeto no lugar de Request: o navegador não deixa um Request levar o cabeçalho Origin
+      return W.fetch({ method: metodo, url: 'https://w.teste' + caminho, headers: new Headers(headers), text: async () => corpo || '' }, env);
+    };
+    // 403 tem de ser pelo CAPTCHA (não por origem ou outro motivo)
+    pedir.recusa = async (r, msg) => { igual(r.status, 403, msg); ok(/anti-robô/.test((await r.json()).erro), msg + ': motivo'); };
+    try { return await fn({ pedir, kv, env, verificados }); } finally { window.fetch = fetchReal; }
+  }
+  const COD = '1jeyJhIjoxfQ';
+  const corpoDoc = () => JSON.stringify({ dados: { cities: {} } });
+
+  teste('POST / sem token ou com token inválido → 403 e nada gravado; com token válido → grava', async () => {
+    await comWorkerReal(async ({ pedir, kv, verificados }) => {
+      await pedir.recusa(await pedir('POST', '/', COD), 'sem token');
+      await pedir.recusa(await pedir('POST', '/', COD, 'ruim'), 'token inválido');
+      igual(Object.keys(kv).length, 0, 'gravou sem CAPTCHA');
+      const r = await pedir('POST', '/', COD, 'bom');
+      igual(r.status, 200, 'token válido ' + (r.status !== 200 ? await r.clone().text() : ''));
+      ok(/^[A-Za-z0-9_-]{10}$/.test((await r.json()).id), 'id');
+      igual(Object.keys(kv).length, 1, 'gravado');
+      ok(verificados.every(v => v.secret === 'segredo'), 'segredo enviado ao siteverify');
     });
   });
 
-  teste('Worker fora do ar: volta para o link completo, com o motivo', async () => {
-    novoEstado();
-    await comWorker('rede', async () => {
-      const r = await window.Compartilhar.link({});
-      ok(/#r=1[zj]/.test(r.url) && !r.curto, 'deveria cair no link completo');
-      ok(r.erroCurto, 'sem motivo');
+  teste('POST /doc (criar link de edição) pede CAPTCHA; GET não pede', async () => {
+    await comWorkerReal(async ({ pedir, kv }) => {
+      await pedir.recusa(await pedir('POST', '/doc', corpoDoc()), 'sem token');
+      igual(Object.keys(kv).length, 0, 'gravou sem CAPTCHA');
+      const r = await pedir('POST', '/doc', corpoDoc(), 'bom');
+      igual(r.status, 200, 'com token');
+      const { id } = await r.json();
+      igual((await pedir('GET', '/doc?id=' + id)).status, 200, 'leitura');
+    });
+  });
+
+  teste('PUT /doc sem CAPTCHA, mas com limite por IP e roteiro → 429', async () => {
+    await comWorkerReal(async ({ pedir, verificados }) => {
+      const { id } = await (await pedir('POST', '/doc', corpoDoc(), 'bom')).json();
+      const n = verificados.length;
+      igual((await pedir('PUT', '/doc?id=' + id + '&base=1', corpoDoc())).status, 200, '1º salvamento');
+      igual((await pedir('PUT', '/doc?id=' + id + '&base=2', corpoDoc())).status, 200, '2º salvamento');
+      igual((await pedir('PUT', '/doc?id=' + id + '&base=3', corpoDoc())).status, 429, 'acima do limite');
+      igual(verificados.length, n, 'salvamento não deveria pedir CAPTCHA');
+    });
+  });
+
+  teste('Sem o segredo cadastrado: recusa gravar (500); CORS libera o cabeçalho X-Turnstile', async () => {
+    await comWorkerReal(async ({ pedir, env, kv }) => {
+      const r = await pedir('OPTIONS', '/');
+      ok(/X-Turnstile/.test(r.headers.get('Access-Control-Allow-Headers') || ''), 'Allow-Headers');
+      delete env.TURNSTILE_SECRET;
+      igual((await pedir('POST', '/', COD, 'bom')).status, 500, 'sem segredo');
+      igual(Object.keys(kv).length, 0, 'gravou sem segredo');
     });
   });
 

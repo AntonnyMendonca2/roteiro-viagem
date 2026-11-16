@@ -272,14 +272,20 @@ O botão **Compartilhar** (barra superior e aba **Dados**) gera um link com o ro
 
 Com vários cenários, pontos e valores, o link completo passa de 2 mil caracteres. Com um **Cloudflare Worker** seu, o roteiro (o mesmo `1z…` compactado) fica guardado num banco KV da sua conta e o link leva só um código de 10 letras: `…/roteiro-viagem/#s=k7Qm2xPaB4`. O plano grátis da Cloudflare basta (KV grátis: 1.000 gravações e 100 mil leituras por dia). O código vem do conteúdo, então o mesmo roteiro gera sempre o mesmo link.
 
-1. Em <https://dash.cloudflare.com>, abra **Storage & Databases → KV → Create** e crie um namespace chamado `roteiros`.
-2. Em **Workers & Pages → Create → Create Worker**, dê um nome (ex.: `links`) e clique em **Deploy**.
-3. **Edit code**: apague o exemplo, cole o conteúdo de `worker/roteiro.js` e clique em **Deploy**.
-4. No Worker, **Settings → Bindings → Add → KV namespace**: *Variable name* `ROTEIROS`, namespace `roteiros`.
-5. Em **Settings → Variables and Secrets**, adicione `ALLOWED_ORIGINS` (tipo **Text**) com o endereço do seu site **sem a pasta**, ex.: `https://seu-usuario.github.io` (para testar no computador, acrescente `,http://localhost:8000`). Opcional: `TTL_DIAS` para apagar os links depois de N dias (sem ela, não expiram).
-6. Copie o endereço do Worker (ex.: `https://links.seu-usuario.workers.dev`) para `linkCurtoUrl`, no `DATA.config` do `js/data.js`, e publique.
+Para que um robô não esgote essas gravações, **gerar link curto** e **criar link de edição** passam por um CAPTCHA (**Cloudflare Turnstile**, modo gerenciado: quase sempre invisível) e o Worker confere o token antes de gravar. Os salvamentos da edição em conjunto não pedem CAPTCHA, mas têm limite por IP e por roteiro (30 por minuto). O Worker é publicado com o **wrangler**, porque esse limite (binding *Rate limiting*) não pode ser criado pelo painel.
 
-Com isso, **Compartilhar** passa a mostrar o link curto (o QR code também fica bem menor), com a opção **Copiar o link completo**, que não depende do servidor. Se o Worker estiver fora do ar, a janela avisa e mostra o link completo. Os links `#r=` antigos continuam abrindo. Importante: o link curto só funciona enquanto o roteiro estiver no seu KV; se você apagar o Worker ou o namespace, ele para de abrir.
+1. Em <https://dash.cloudflare.com>, abra **Storage & Databases → KV → Create** e crie um namespace chamado `roteiros`. Copie o **ID** dele para `worker/wrangler.toml` (`[[kv_namespaces]] → id`).
+2. **Turnstile → Add widget**: dê um nome, em **Hostnames** coloque o domínio do site (ex.: `seu-usuario.github.io`), modo **Managed** → **Create**. A tela mostra duas chaves:
+   - **Site Key** (pública) → `turnstileSiteKey`, no `DATA.config` do `js/data.js`;
+   - **Secret Key** → só no Worker, como segredo `TURNSTILE_SECRET` (passo 4). **Nunca no repositório.**
+3. Em `worker/wrangler.toml`, confira `name` (o nome do Worker; se ainda não existe, é criado) e rode `npm run worker`. Na primeira vez o wrangler abre o navegador para entrar na conta Cloudflare.
+4. Cadastre a chave secreta: `npx wrangler@4 secret put TURNSTILE_SECRET --config worker/wrangler.toml` (cole a Secret Key quando pedir), ou no painel: Worker → **Settings → Variables and Secrets → Add → Secret**.
+5. No painel, Worker → **Settings → Variables and Secrets**, adicione `ALLOWED_ORIGINS` (tipo **Text**) com o endereço do seu site **sem a pasta**, ex.: `https://seu-usuario.github.io` (para testar no computador, acrescente `,http://localhost:5173`). Opcional: `TTL_DIAS` para apagar os links depois de N dias (sem ela, não expiram). O `wrangler.toml` tem `keep_vars = true`: publicar de novo não apaga essas variáveis.
+6. Copie o endereço do Worker (ex.: `https://links.seu-usuario.workers.dev`) para `linkCurtoUrl`, no `DATA.config` do `js/data.js`, e publique o site.
+
+Com isso, **Compartilhar** mostra o link completo na hora e o botão **Gerar link curto**: só no clique o roteiro vai ao Worker (com o CAPTCHA), e o link curto aparece (o QR code também fica bem menor), com a opção **Copiar o link completo**, que não depende do servidor. Abrir a janela ou marcar opções não grava nada. Se o CAPTCHA falhar ou o Worker estiver fora do ar, a janela avisa e fica com o link completo.
+
+Para testar no computador, use as chaves de teste do Turnstile (não vão para o site publicado): site `1x00000000000000000000AA` e segredo `1x0000000000000000000000000000000AA` (sempre passam). Os links `#r=` antigos continuam abrindo. Importante: o link curto só funciona enquanto o roteiro estiver no seu KV; se você apagar o Worker ou o namespace, ele para de abrir.
 
 ### Edição em conjunto
 
@@ -290,6 +296,7 @@ Precisa do Worker de links curtos (abaixo) com o código atual de `worker/roteir
 - Câmbio, spread/IOF e filtros continuam pessoais.
 - **Quem tiver o link de edição pode mudar o roteiro** — mande só para quem vai planejar com você. *Sair (fico com uma cópia)* ou *Sair e voltar ao meu roteiro* encerram.
 - O KV da Cloudflare pode levar até ~1 minuto para mostrar uma mudança em outra região do mundo; entre pessoas no mesmo país costuma ser imediato. Cada mudança salva conta como 1 gravação (o plano grátis permite 1.000 por dia).
+- Criar o link de edição pede o CAPTCHA; os salvamentos não, mas o Worker aceita no máximo 30 por minuto de cada pessoa (IP) em cada roteiro. Acima disso a barra mostra **muitas mudanças, aguardando…** e o app tenta de novo sozinho.
 
 ## APIs externas
 
@@ -308,6 +315,7 @@ guardado ou mostra um aviso discreto. Nenhuma chave de API fica no código do si
 | QR code do link de compartilhamento | biblioteca `qrcode-generator@1.4.4` (jsDelivr), carregada só ao abrir a janela | — |
 | Jogos de futebol (opcional, desligado por padrão) | football-data.org **pelo seu Cloudflare Worker** (a chave fica no Worker) | 12 h |
 | Links curtos de compartilhamento (opcional, desligado por padrão) | **seu Cloudflare Worker** + KV (`worker/roteiro.js`) | — |
+| CAPTCHA ao gerar link curto / link de edição | Cloudflare Turnstile (`challenges.cloudflare.com`), carregado só no clique | — |
 
 ## Testes
 
