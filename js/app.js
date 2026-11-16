@@ -65,9 +65,35 @@
   };
 
   /* ---------------------------------------------------------------- estado */
+  /* Versão do PADRÃO. Links, cenários e roteiros de edição guardam só a diferença em relação ao
+     padrão; se o padrão muda, o que foi guardado antes precisa ser lido em cima do padrão antigo.
+       1 = até nov/2026: o site abria com um roteiro pronto (Londres → Paris → Cracóvia).
+       2 = o site abre vazio. */
+  App.PADRAO = 2;
+  const PADRAO_V1 = {
+    cidades: [['londres', 1, 3], ['paris', 2, 4], ['cracovia', 3, 3]],
+    pontos: ['british-museum', 'natural-history', 'tower-of-london', 'tower-bridge', 'big-ben', 'buckingham', 'plataforma-9-34', 'wb-studio-tour',
+      'oxford-street', 'torre-eiffel', 'louvre', 'notre-dame', 'montmartre', 'disneyland', 'rynek-glowny', 'wawel', 'kazimierz', 'auschwitz'],
+    gerais: { eta: { v: 16, cur: 'GBP' }, roupas: { v: 2000, cur: 'BRL' } },
+    orcamento: 15000
+  };
+  // Padrão da versão 1 (para ler o que foi guardado antes do site abrir vazio).
+  function defaultsV1() {
+    const s = defaults();
+    PADRAO_V1.cidades.forEach(([id, ordem, noites]) => { if (s.cities[id]) Object.assign(s.cities[id], { sel: true, ordem, noites }); });
+    PADRAO_V1.pontos.forEach(id => { if (s.pois[id]) s.pois[id].sel = true; });
+    Object.keys(PADRAO_V1.gerais).forEach(k => { if (s.gerais[k]) s.gerais[k] = clone(PADRAO_V1.gerais[k]); });
+    s.orcamento = PADRAO_V1.orcamento;
+    s.padrao = 1;
+    return s;
+  }
+  // Padrão sobre o qual um objeto guardado deve ser lido.
+  const padraoDe = obj => (isObj(obj) && obj.padrao === App.PADRAO ? defaults() : defaultsV1());
+
   function defaults() {
     const s = {
       v: 1,
+      padrao: App.PADRAO,                       // versão do padrão (veja acima)
       dataSaida: D.config.dataSaida,
       orcamento: D.config.orcamento,
       iof: !!D.config.iof,
@@ -144,6 +170,16 @@
   // Ajusta dados salvos por versões antigas do app (antes de completar com os padrões).
   function migrar(src) {
     if (!isObj(src)) return src;
+    // guardado com o padrão antigo: os retratos dos cenários passam a ser relativos ao padrão novo
+    if (src.padrao !== App.PADRAO) {
+      const CAMPOS = window.Cenarios.CAMPOS, pegar = S => { const o = {}; CAMPOS.forEach(k => { o[k] = S[k]; }); return o; };
+      if (Array.isArray(src.cenarios)) src.cenarios.forEach(c => {
+        if (!isObj(c) || !isObj(c.dados)) return;
+        const cheio = merge(defaultsV1(), clone(c.dados));
+        c.dados = diff(pegar(defaults()), pegar(cheio)) || {};
+      });
+      src.padrao = App.PADRAO;
+    }
     // quem já tinha digitado o câmbio à mão continua no modo manual
     if (src.cambioModo === undefined && isObj(src.cambio) &&
         Object.keys(D.cambio).some(m => src.cambio[m] !== undefined && num(src.cambio[m]) !== D.cambio[m])) src.cambioModo = 'manual';
@@ -167,6 +203,7 @@
   }
 
   function sanitize(s) {
+    s.padrao = App.PADRAO;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.dataSaida || '')) s.dataSaida = D.config.dataSaida;
     D.cities.forEach(c => {
       const cs = s.cities[c.id];
@@ -1175,7 +1212,7 @@
     try { obj = JSON.parse(text); } catch (e) { obj = null; }
     const src = obj && isObj(obj.estado) ? obj.estado : obj;
     if (!isObj(src) || !isObj(src.cities) || !isObj(src.pois)) return null;
-    return sanitize(merge(defaults(), migrar(src)));
+    return sanitize(merge(defaults(), migrar(src)));     // arquivo exportado = estado completo
   };
 
   App.exportJSON = function () {
@@ -1208,7 +1245,7 @@
   };
 
   App.reset = function () {
-    if (!window.confirm('Restaurar o roteiro padrão? Todas as suas escolhas, valores e cenários serão apagados.')) return;
+    if (!window.confirm('Começar do zero? Todas as suas escolhas, valores e cenários deste navegador serão apagados.\n\nSe quiser guardar o roteiro atual, cancele e use "Compartilhar" ou "Exportar JSON" antes.')) return;
     try { window.localStorage.removeItem(LS_KEY); } catch (e) { /* ok */ }
     window.Compartilhar.encerrar();
     App.state = sanitize(defaults());
@@ -1217,7 +1254,7 @@
     MapView.rebuildPois();
     App.refresh();
     MapView.reset();
-    UI.toast('Roteiro padrão restaurado.');
+    UI.toast('Pronto: roteiro vazio. Clique numa cidade no mapa para começar.');
   };
 
   /* ------------------------------------------------------------ inicialização */
@@ -1271,6 +1308,6 @@
   }
 
   // Ganchos para a página de testes (tests/index.html), que carrega os scripts sem iniciar o app.
-  App._t = { defaults, merge, diff, sanitize, compute, bvCost, heldKarp, heuristica, trainPath, caminho, estimar, pairCost, routeCost, legDef };
+  App._t = { defaults, defaultsV1, padraoDe, migrar, merge, diff, sanitize, compute, bvCost, heldKarp, heuristica, trainPath, caminho, estimar, pairCost, routeCost, legDef };
   if (!window.VIAGEM_TESTE) init();
 })();

@@ -81,13 +81,16 @@
     }
     enxugar(e);
     e.cenarios.forEach(c => enxugar(c.dados));
-    return T.diff(T.defaults(), e) || {};
+    const out = T.diff(T.defaults(), e) || {};
+    out.padrao = A().PADRAO;           // diz sobre qual padrão o link foi feito (links antigos não têm)
+    return out;
   };
 
   // Estado completo a partir do objeto do link.
   Comp.estadoDe = function (obj) {
-    const T = A()._t;
-    return T.sanitize(T.merge(T.defaults(), clone(isObj(obj) ? obj : {})));
+    const T = A()._t, o = clone(isObj(obj) ? obj : {});
+    const base = T.padraoDe(o);                        // link antigo: lido em cima do padrão antigo
+    return T.sanitize(T.merge(base, T.migrar(o)));
   };
 
   /* ============================================================ codificação */

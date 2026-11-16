@@ -573,8 +573,9 @@
     const App = A(), c = App.calc, orc = App.num(App.state.orcamento);
     countTo(els.sumTotal, c.total);
     const pct = orc > 0 ? c.total / orc * 100 : 0;
-    els.sumPct.textContent = Math.round(pct) + '%';
-    els.sumBudget.textContent = Fmt.brl(orc);
+    els.sumPct.textContent = orc > 0 ? Math.round(pct) + '%' : '';
+    els.sumBudget.parentNode.innerHTML = orc > 0 ? 'de <span id="sum-budget">' + Fmt.brl(orc) + '</span>' : '<span id="sum-budget">sem orçamento</span>';
+    els.sumBudget = document.getElementById('sum-budget');
     els.sumBar.style.width = Math.min(100, pct) + '%';
     els.sumBar.parentNode.classList.toggle('over', pct > 100);
     els.sumPct.classList.toggle('over', pct > 100);
@@ -958,7 +959,7 @@
       '<button type="button" class="btn primary" data-act="share">Compartilhar por link…</button>' +
       '<button type="button" class="btn" data-act="export">Exportar JSON</button>' +
       '<button type="button" class="btn" data-act="import">Importar JSON</button>' +
-      '<button type="button" class="btn danger" data-act="reset">Restaurar padrão</button></div>' +
+      '<button type="button" class="btn danger" data-act="reset">Começar do zero</button></div>' +
       '<h4>Rotas dos trens</h4>' +
       '<p class="muted">O traçado real das ferrovias é buscado aos poucos, só para os trechos do seu roteiro, e fica guardado neste navegador. Para ter tudo disponível sem internet, pré-carregue todos os trechos de trem da tabela (leva uns 2 minutos).</p>' +
       '<div class="btn-col"><button type="button" class="btn" data-act="rail-preload">Pré-carregar rotas dos trens</button></div>' +

@@ -20,8 +20,20 @@
   }
   window.Teste = { grupo, teste, ok, igual, perto };
 
-  // Estado limpo (padrão do data.js) antes de cada teste.
-  function novoEstado() { App.state = T.sanitize(T.defaults()); return App.state; }
+  // O site abre vazio. Os testes usam um roteiro fixo de referência (o antigo roteiro padrão):
+  // Londres (3 noites) → Paris (4) → Cracóvia (3), com estes pontos selecionados.
+  const ROTEIRO_TESTE = {
+    cidades: [['londres', 1, 3], ['paris', 2, 4], ['cracovia', 3, 3]],
+    pontos: ['british-museum', 'natural-history', 'tower-of-london', 'tower-bridge', 'big-ben', 'buckingham', 'plataforma-9-34', 'wb-studio-tour',
+      'oxford-street', 'torre-eiffel', 'louvre', 'notre-dame', 'montmartre', 'disneyland', 'rynek-glowny', 'wawel', 'kazimierz', 'auschwitz']
+  };
+  function comRoteiroTeste(S) {
+    ROTEIRO_TESTE.cidades.forEach(([id, ordem, noites]) => Object.assign(S.cities[id], { sel: true, ordem, noites }));
+    ROTEIRO_TESTE.pontos.forEach(id => { S.pois[id].sel = true; });
+    return S;
+  }
+  // Estado limpo antes de cada teste: padrão do data.js + roteiro de referência.
+  function novoEstado() { App.state = T.sanitize(comRoteiroTeste(T.defaults())); return App.state; }
   window.Teste.novoEstado = novoEstado;
 
   // Todas as permutações de uma lista (força bruta).
@@ -128,8 +140,9 @@
       ok(D.pois.filter(p => p.cityId === c.id).length >= 2, c.id + ': poucos pontos');
     });
     D.pois.forEach(p => ok(p.duracaoH > 0 && p.preco && p.preco.cur in D.simbolos && p.desc.length > 30, p.id));
-    igual(D.cities.filter(c => c.selecionada).map(c => c.id), ['londres', 'paris', 'cracovia'], 'roteiro padrão');
-    igual(D.pois.filter(p => p.selecionado && ['londres', 'paris', 'cracovia'].indexOf(p.cityId) < 0), [], 'nenhum ponto novo selecionado');
+    igual(D.cities.filter(c => c.selecionada).map(c => c.id), [], 'o site abre sem cidades');
+    igual(D.pois.filter(p => p.selecionado).map(p => p.id), [], 'o site abre sem pontos');
+    ok(ROTEIRO_TESTE.pontos.every(id => D.pois.some(p => p.id === id)), 'pontos do roteiro de teste existem');
   });
 
   /* ---------------------------------------------------------------- câmbio */
@@ -541,9 +554,10 @@
     const S = novoEstado();
     S.cities.roma.sel = true; S.cities.roma.noites = 4; S.dataSaida = '2027-04-10';
     S.legs['paris~zurique'] = { modo: 'aviao' };
-    const d = T.diff(T.defaults(), S);
+    const base = T.sanitize(comRoteiroTeste(T.defaults()));      // o roteiro de referência, sem as mudanças acima
+    const d = T.diff(base, S);
     ok(d.cities.roma.noites === 4 && Object.keys(d.cities).length === 1, 'só o que mudou entra no diff');
-    const volta = T.sanitize(T.merge(T.defaults(), d));
+    const volta = T.sanitize(T.merge(T.sanitize(comRoteiroTeste(T.defaults())), d));
     igual(Cen.retrato(volta), Cen.retrato(S));
     ok(T.diff({ a: 1, b: { c: [1, 2] } }, { a: 1, b: { c: [1, 2] } }) === undefined, 'iguais → undefined');
   });
@@ -650,11 +664,11 @@
 
   teste('Só o que difere do padrão entra no link; sem "todos", vai só o cenário ativo', () => {
     const S = estadoMexido(), obj = Comp.montar(S, {});
-    igual(Object.keys(obj.cities).sort(), ['londres', 'roma']);
+    igual(Object.keys(obj.cities).sort(), ['cracovia', 'londres', 'paris', 'roma'], 'as cidades do roteiro (o padrão é vazio) + Roma');
     ok(obj.cenarios.length === 1 && obj.cenarios[0].id === S.cenarioAtivo, 'só o cenário ativo');
     ok(obj.cambio === undefined && obj.cambioInfo === undefined, 'câmbio automático não vai no link');
     ok(Comp.montar(S, { todos: true }).cenarios.length === 2, 'com "todos", vão os dois');
-    igual(Comp.montar(novoEstado(), {}).cities, undefined, 'roteiro padrão → nada de cidades no link');
+    igual(Comp.montar(T.sanitize(T.defaults()), {}).cities, undefined, 'roteiro vazio (padrão) → nada de cidades no link');
   });
 
   teste('"Não incluir hospedagens e valores" tira hospedagens, gastos e valores reais', () => {
@@ -766,6 +780,49 @@
   });
 
   /* ------------------------------------------------------------ utilitários */
+  grupo('Site vazio e compatibilidade');
+
+  teste('O padrão é vazio: sem cidades, pontos, itens gerais nem orçamento', () => {
+    const S = T.sanitize(T.defaults());
+    App.state = S; App.calc = T.compute();
+    igual([App.calc.route.length, App.calc.total, S.orcamento], [0, 0, 0]);
+  });
+
+  // Como era um link/cenário salvo antes do site abrir vazio: só a diferença em relação ao padrão antigo.
+  const formatoAntigo = S => { const d = T.diff(T.defaults ? T.defaultsV1() : null, JSON.parse(JSON.stringify(S))) || {}; delete d.padrao; return d; };
+
+  teste('Link antigo (padrão v1) abre com Londres, Paris e Cracóvia', async () => {
+    const S = novoEstado(); S.cities.roma.sel = true; S.cities.roma.ordem = 50;
+    S.gerais = JSON.parse(JSON.stringify(T.defaultsV1().gerais)); S.orcamento = 15000;   // valores daquela época
+    const antigo = formatoAntigo(S);
+    ok(!antigo.cities || !antigo.cities.londres || antigo.cities.londres.sel === undefined, 'o formato antigo não citava Londres');
+    const cod = await window.Compartilhar.codificar(antigo);
+    const e = window.Compartilhar.estadoDe(await window.Compartilhar.decodificar(cod));
+    igual(['londres', 'paris', 'cracovia', 'roma'].map(id => e.cities[id].sel), [true, true, true, true]);
+    ok(e.pois['louvre'].sel && e.gerais.roupas.v === 2000, 'pontos e itens gerais do padrão antigo');
+  });
+
+  teste('Link novo (padrão v2) leva as cidades e abre igual', async () => {
+    const S = novoEstado();
+    const obj = window.Compartilhar.montar(S, {});
+    igual(obj.padrao, App.PADRAO);
+    const e = window.Compartilhar.estadoDe(obj);
+    igual(['londres', 'paris', 'cracovia', 'roma'].map(id => e.cities[id].sel), [true, true, true, false]);
+  });
+
+  teste('Cenário guardado no formato antigo é convertido ao carregar', () => {
+    const S = novoEstado();
+    const outro = JSON.parse(JSON.stringify(S)); outro.cities.roma.sel = true; outro.cities.roma.ordem = 50;
+    const pegar = x => { const o = {}; Cen.CAMPOS.forEach(k => { o[k] = x[k]; }); return o; };
+    const salvo = JSON.parse(JSON.stringify(S));
+    delete salvo.padrao;                                                   // estado de antes da mudança
+    salvo.cenarios.push({ id: 'cB', nome: 'B', alterado: '', dados: T.diff(pegar(T.defaultsV1()), pegar(outro)) });
+    const e = App.lerPacote(JSON.stringify(salvo));
+    const b = e.cenarios.find(c => c.id === 'cB');
+    const r = Cen.restaurar(JSON.parse(JSON.stringify(e)), b.dados);
+    igual(['londres', 'paris', 'cracovia', 'roma'].map(id => r.cities[id].sel), [true, true, true, true]);
+  });
+
   grupo('Reservas');
 
   teste('Status automático: trechos e hospedagens pedem reserva; ponto grátis não', () => {

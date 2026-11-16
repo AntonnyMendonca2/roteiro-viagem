@@ -107,7 +107,7 @@ tests/          testes das funções puras (abra tests/index.html no navegador)
   marcados como "estimativa".
 - `config`, `cambio`, `gerais` — data de saída, orçamento, câmbio e itens gerais padrão.
 
-Depois de mudar valores padrão no `data.js`, use **Dados → Restaurar padrão** no app para
+Depois de mudar valores padrão no `data.js`, use **Dados → Começar do zero** no app para
 descartar o que estava salvo no navegador.
 
 ## Como usar
