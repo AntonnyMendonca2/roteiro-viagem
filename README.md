@@ -1,7 +1,7 @@
 # Mapa da Viagem — Europa 2027
 
-Planejador de viagem em forma de mapa interativo da Europa. Site estático (HTML + CSS +
-JavaScript puro): não tem build, backend nem npm.
+Planejador de viagem em forma de mapa interativo da Europa. HTML + CSS + JavaScript puro (sem
+framework), com um build de produção (Vite) que junta e minifica o código para publicar.
 
 - 69 destinos em toda a Europa, com cerca de 500 pontos de interesse.
 - Escolha cidades, pontos de interesse e meio de transporte (trem, ônibus, balsa ou avião) de cada trecho.
@@ -10,42 +10,40 @@ JavaScript puro): não tem build, backend nem npm.
 
 ## Como rodar no computador
 
-**Opção 1 — duplo clique:** abra o arquivo `index.html` no navegador. Funciona direto em
-`file://`.
-
-**Opção 2 — servidor local** (opcional):
+Precisa do [Node.js](https://nodejs.org) 20.19+ ou 22.12+.
 
 ```bash
-# dentro da pasta do projeto
-python -m http.server 8000
-# depois abra http://localhost:8000
+npm install        # uma vez
+npm run dev        # servidor de desenvolvimento com o código legível: abra o endereço que aparecer
+npm run build      # build de produção em dist/ (minificado, sem comentários e sem source maps)
+npm run preview    # serve o dist/ para conferir o build
 ```
+
+O `index.html` carrega `js/main.js` como módulo, então **não abre mais com duplo clique**
+(`file://`): use `npm run dev`. Os testes (`tests/index.html`) continuam abrindo com duplo clique.
 
 É preciso estar conectado à internet: o D3, o contorno dos países, a fonte Inter e as fotos
 (Wikipedia) vêm de CDNs. Sem internet o roteiro e o orçamento continuam funcionando, mas o mapa
 fica sem os países e sem fotos.
 
-## Como publicar no GitHub Pages
+## Como publicar (GitHub Pages)
 
-1. Crie um repositório no GitHub (por exemplo, `viagem`).
-2. Envie os arquivos desta pasta:
+O workflow `.github/workflows/deploy.yml` faz o build a cada push na `main` e publica **só a pasta
+`dist/`**. O código legível, os testes, o `worker/`, o `docs/` e os prompts não vão para o site.
 
-   ```bash
-   git init
-   git add .
-   git commit -m "Mapa da viagem"
-   git branch -M main
-   git remote add origin https://github.com/<usuario>/<repositorio>.git
-   git push -u origin main
-   ```
+1. No GitHub, abra **Settings → Pages → Build and deployment** e escolha **Source: GitHub Actions**
+   (uma vez só).
+2. A cada `git push` na `main`, a aba **Actions** mostra o build; em um ou dois minutos o site
+   atualiza em `https://<usuario>.github.io/<repositorio>/`.
 
-3. No GitHub, abra **Settings → Pages**. Em **Build and deployment**, escolha
-   **Source: Deploy from a branch**, branch **main**, pasta **/ (root)** e clique em **Save**.
-4. Em um ou dois minutos o site fica disponível em
-   `https://<usuario>.github.io/<repositorio>/`.
+O build usa caminhos relativos, então funciona em qualquer subpasta.
 
-O projeto usa só caminhos relativos, então funciona em qualquer subpasta. O arquivo `.nojekyll`
-(vazio) avisa o GitHub para servir os arquivos como estão.
+### Por que o build
+
+No navegador, todo site entrega o código da interface — não dá para impedir a cópia. O build
+dificulta entender e reaproveitar o código: um arquivo só, com nome aleatório
+(`assets/Dn3pLQry.js`), sem comentários, com os nomes internos encurtados e sem source maps. A
+proteção de verdade dos dados e da lógica vem com o backend (veja `docs/migracao-aws.md`).
 
 > O que você digita no app fica salvo **no seu navegador**, não no repositório. Para levar o
 > roteiro para outro aparelho, use **Dados → Exportar JSON** e depois **Importar JSON**.
@@ -54,7 +52,12 @@ O projeto usa só caminhos relativos, então funciona em qualquer subpasta. O ar
 
 ```
 index.html      página única
+package.json    scripts do npm (dev, build, preview) e a versão do Vite
+vite.config.js  build de produção (minificação, nomes com hash, sem source maps)
+.github/workflows/deploy.yml   build + publicação no GitHub Pages a cada push
+docs/migracao-aws.md   plano de migração para a AWS (login, banco e API)
 css/style.css   estilo (monocromático + 1 cor de destaque)
+js/main.js      entrada do build: importa os scripts abaixo na ordem certa
 js/data.js      objeto DATA: cidades e pontos do roteiro original, trechos, câmbio, itens gerais
 js/data-europa.js    Europa completa: demais cidades, moedas, trechos (trem/ônibus/balsa/avião)
 js/data-pontos-*.js  pontos de interesse das cidades novas (e reforço das antigas)
