@@ -412,6 +412,7 @@
     });
 
     bindDrag();
+    bindGaveta();
   }
 
   const semAcento = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -461,6 +462,63 @@
   function openDrawer(open) {
     if (document.body.classList.contains('drawer-open') === open) return;
     document.body.classList.toggle('drawer-open', open);
+  }
+
+  // Celular: arrastar a gaveta. Pela alça/resumo, para cima abre e para baixo fecha;
+  // com o conteúdo no topo, puxar para baixo também fecha (padrão das "bottom sheets").
+  UI.decideGaveta = function (aberto, dy, vel) {
+    if (aberto) return !(dy > 70 || vel > 0.5);       // continua aberta?
+    return dy < -70 || vel < -0.5;                     // abre?
+  };
+  function bindGaveta() {
+    const sb = els.sidebar, head = $('#summary');
+    let g = null, ignorarClique = 0;
+    const peek = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--peek')) || 104;
+
+    sb.addEventListener('touchstart', e => {
+      g = null;
+      if (!A().isMobile() || e.touches.length !== 1) return;
+      const t = e.target, aberto = document.body.classList.contains('drawer-open');
+      const alca = head.contains(t) && !t.closest('#sum-details');
+      const rol = !alca && aberto ? t.closest('#detail, .sb-scroll') : null;
+      if (!alca && !(rol && rol.scrollTop <= 0)) return;
+      const y = e.touches[0].clientY;
+      g = { alca, rol, aberto, y0: y, dy: 0, ativo: false, ultY: y, ultT: e.timeStamp, vel: 0 };
+    }, { passive: true });
+
+    sb.addEventListener('touchmove', e => {
+      if (!g) return;
+      const y = e.touches[0].clientY;
+      g.dy = y - g.y0;
+      if (!g.ativo) {
+        if (Math.abs(g.dy) < 8) return;
+        const paraBaixo = g.dy > 0;
+        // rolagem normal do conteúdo, ou gesto na direção em que a gaveta não anda
+        if ((!g.alca && (!paraBaixo || g.rol.scrollTop > 0)) || (g.aberto === !paraBaixo)) { g = null; return; }
+        g.ativo = true; g.y0 = y; g.dy = 0;
+        sb.style.transition = 'none';
+      }
+      e.preventDefault();
+      const dt = Math.max(1, e.timeStamp - g.ultT);
+      g.vel = 0.7 * ((y - g.ultY) / dt) + 0.3 * g.vel;
+      g.ultY = y; g.ultT = e.timeStamp;
+      const fechado = sb.offsetHeight - peek();
+      const pos = Math.max(0, Math.min(fechado, (g.aberto ? 0 : fechado) + g.dy));
+      sb.style.transform = 'translateY(' + pos + 'px)';
+    }, { passive: false });
+
+    const fim = () => {
+      if (!g || !g.ativo) { g = null; return; }
+      const abrir = UI.decideGaveta(g.aberto, g.dy, g.vel);
+      g = null;
+      sb.style.transition = ''; sb.style.transform = '';    // volta ao CSS, que anima até a posição final
+      ignorarClique = Date.now() + 400;
+      openDrawer(abrir);
+    };
+    sb.addEventListener('touchend', fim);
+    sb.addEventListener('touchcancel', fim);
+    // depois de arrastar, o toque não vale como clique (ex.: na alça, que abre/fecha)
+    sb.addEventListener('click', e => { if (Date.now() < ignorarClique) { e.stopPropagation(); e.preventDefault(); } }, true);
   }
 
   /* ==================================================================== toasts */
