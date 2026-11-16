@@ -31,10 +31,14 @@
     'https://www.tottenhamhotspur.com/fixtures/men/', 'https://www.tottenhamhotspur.com/tickets/', { fd: 73 });
   K('londres', 'west-ham', 'West Ham United', 'London Stadium', 51.5387, -0.0166, 'Premier League',
     'https://www.whufc.com/fixtures', 'https://www.whufc.com/tickets', { fd: 563 });
+  K('liverpool', 'liverpool-fc', 'Liverpool', 'Anfield', 53.4308, -2.9608, 'Premier League',
+    'https://www.liverpoolfc.com/fixtures', 'https://www.liverpoolfc.com/tickets', { poi: 'liv-anfield', fd: 64 });
+  K('liverpool', 'everton', 'Everton', 'Hill Dickinson Stadium', 53.4247, -3.0001, 'Premier League',
+    'https://www.evertonfc.com/fixtures', 'https://www.evertonfc.com/tickets', { fd: 62 });
 
   /* ---------------------------------------------------------------- França */
   K('paris', 'psg', 'Paris Saint-Germain', 'Parc des Princes', 48.8414, 2.2530, 'Ligue 1',
-    'https://www.psg.fr/calendrier', 'https://billetterie.psg.fr', { fd: 524 });
+    'https://www.psg.fr/calendrier', 'https://billetterie.psg.fr', { poi: 'par-parc-des-princes', fd: 524 });
   K('nice', 'nice', 'OGC Nice', 'Allianz Riviera', 43.7050, 7.1926, 'Ligue 1',
     'https://www.ogcnice.com', 'https://billetterie.ogcnice.com', { fd: 522 });
   K('monaco', 'monaco', 'AS Monaco', 'Stade Louis-II', 43.7277, 7.4156, 'Ligue 1',

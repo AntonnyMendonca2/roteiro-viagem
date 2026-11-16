@@ -43,7 +43,7 @@ window.DATA = {
   },
 
   /* ------------------------------------------------------------------ tags */
-  tags: ['Harry Potter', 'Compras', 'Museu', 'Bate-volta', 'Futebol'],
+  tags: ['Harry Potter', 'Compras', 'Museu', 'Bate-volta', 'Futebol', 'Música'],
 
   /* ------------------------------------- gastos por cidade (campos do painel) */
   categorias: [

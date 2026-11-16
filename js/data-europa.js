@@ -46,6 +46,10 @@
   C('granada', 'Granada', 'Espanha', 724, 37.1773, -3.5986, 'EUR', 'Granada', 'GRX', 'spain/granada', ['Granada', 37.1840, -3.6090], 28, 30, { rotulo: 'e' });
   C('porto', 'Porto', 'Portugal', 620, 41.1579, -8.6291, 'EUR', 'Porto', 'OPO', 'portugal/porto', ['Porto Campanhã', 41.1488, -8.5858], 30, 32, { rotulo: 'w' });
 
+  /* Reino Unido (além de Londres) */
+  C('liverpool', 'Liverpool', 'Reino Unido', 826, 53.4084, -2.9916, 'GBP', 'Liverpool', 'LPL', 'england/liverpool', ['Liverpool Lime Street', 53.4076, -2.9775], 32, 32, { rotulo: 'w',
+    nota: 'A cidade dos Beatles e do Liverpool FC. Fica a ~2h15 de trem de Londres: dá para conhecer em um bate-volta (veja o ponto "Liverpool dos Beatles" em Londres) ou dormir aqui.' });
+
   /* Irlanda, Benelux */
   C('dublin', 'Dublin', 'Irlanda', 372, 53.3498, -6.2603, 'EUR', 'Dublin', 'DUB', 'ireland/dublin', ['Dublin Connolly', 53.3531, -6.2460], 55, 45, { grande: true, rotulo: 'w',
     nota: 'A Irlanda não faz parte do espaço Schengen: há controle de passaporte na chegada. De trem, só se sai da ilha de balsa.' });
@@ -165,6 +169,8 @@
   L('londres', 'bruxelas', 'trem', { trem: ['Eurostar St Pancras → Bruxelles-Midi', 2, 2.1, 50, 140] });
   L('londres', 'amsterda', 'trem', { trem: ['Eurostar direto', 4.1, 4.3, 60, 160], aviao: ['Voo direto', 1.25, 1.25, 50, 130] });
   L('londres', 'dublin', 'aviao', { balsa: ['Trem até Holyhead + balsa (SailRail)', 8, 9, 50, 75, VIA('Holyhead', 53.3095, -4.6310)], aviao: ['Voo direto', 1.4, 1.4, 30, 120] });
+  L('londres', 'liverpool', 'trem', { trem: ['Avanti West Coast Euston → Lime Street (direto)', 2.1, 2.3, 30, 120], onibus: ['National Express direto', 5, 5.5, 10, 35], aviao: false });
+  L('liverpool', 'dublin', 'balsa', { balsa: ['Balsa P&O Liverpool → Dublin', 8, 8.5, 40, 110], aviao: ['Voo direto', 1, 1, 25, 100] });
   L('paris', 'bruxelas', 'trem', { trem: ['Eurostar (antigo Thalys)', 1.4, 1.4, 30, 100], aviao: false });
   L('paris', 'amsterda', 'trem', { trem: ['Eurostar direto', 3.3, 3.4, 40, 140], aviao: ['Voo direto', 1.3, 1.3, 60, 140] });
   L('paris', 'luxemburgo', 'trem', { trem: ['TGV direto', 2.2, 2.3, 30, 90], aviao: false });

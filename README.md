@@ -3,7 +3,7 @@
 Planejador de viagem em forma de mapa interativo da Europa. Site estático (HTML + CSS +
 JavaScript puro): não tem build, backend nem npm.
 
-- 68 destinos em toda a Europa, com cerca de 500 pontos de interesse.
+- 69 destinos em toda a Europa, com cerca de 500 pontos de interesse.
 - Escolha cidades, pontos de interesse e meio de transporte (trem, ônibus, balsa ou avião) de cada trecho.
 - Os totais, as datas e o comparativo terrestre × avião se recalculam na hora.
 - Suas escolhas ficam salvas no navegador (localStorage) e podem ser exportadas/importadas em JSON.

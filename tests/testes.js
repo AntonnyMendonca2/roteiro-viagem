@@ -481,7 +481,7 @@
     return window.Assistente.problema();
   }
 
-  teste('Respeita o prazo e o orçamento (dados reais, 68 cidades)', () => {
+  teste('Respeita o prazo e o orçamento (dados reais, 69 cidades)', () => {
     const prob = probReal(14, 12000);
     ['interesse', 'barata', 'equilibrada'].forEach(obj => {
       const r = window.Assistente.otimizar(prob, obj, { ms: 5000, maxIter: 20000, semente: 7 });
