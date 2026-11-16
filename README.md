@@ -43,7 +43,7 @@ O build usa caminhos relativos, então funciona em qualquer subpasta.
 No navegador, todo site entrega o código da interface — não dá para impedir a cópia. O build
 dificulta entender e reaproveitar o código: um arquivo só, com nome aleatório
 (`assets/Dn3pLQry.js`), sem comentários, com os nomes internos encurtados e sem source maps. A
-proteção de verdade dos dados e da lógica vem com o backend (veja `docs/migracao-aws.md`).
+proteção de verdade dos dados e da lógica só viria com um backend (API com login).
 
 > O que você digita no app fica salvo **no seu navegador**, não no repositório. Para levar o
 > roteiro para outro aparelho, use **Dados → Exportar JSON** e depois **Importar JSON**.
@@ -55,7 +55,6 @@ index.html      página única
 package.json    scripts do npm (dev, build, preview) e a versão do Vite
 vite.config.js  build de produção (minificação, nomes com hash, sem source maps)
 .github/workflows/deploy.yml   build + publicação no GitHub Pages a cada push
-docs/migracao-aws.md   plano de migração para a AWS (login, banco e API)
 css/style.css   estilo (monocromático + 1 cor de destaque)
 js/main.js      entrada do build: importa os scripts abaixo na ordem certa
 js/data.js      objeto DATA: cidades e pontos do roteiro original, trechos, câmbio, itens gerais
