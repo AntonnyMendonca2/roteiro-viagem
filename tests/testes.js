@@ -766,6 +766,148 @@
   });
 
   /* ------------------------------------------------------------ utilitários */
+  grupo('Reservas');
+
+  teste('Status automático: trechos e hospedagens pedem reserva; ponto grátis não', () => {
+    const S = novoEstado();
+    App.calc = T.compute();
+    const r = App.reservas();
+    ok(r.filter(x => x.tipo === 'trecho').every(x => x.st === 'pendente' && x.auto), 'trechos');
+    ok(r.filter(x => x.tipo === 'hosp').length === App.calc.route.length, 'uma hospedagem por cidade');
+    const gratis = App.pois().find(p => App.poiActive(p.id) && !p.preco.v && !(p.avisos || []).length);
+    ok(gratis, 'precisa de um ponto grátis selecionado no padrão');
+    igual(App.resStatus('ponto', gratis.id, S.pois[gratis.id].res), 'nao', 'ponto grátis');
+    const pago = App.pois().find(p => App.poiActive(p.id) && p.preco.v > 0);
+    igual(App.resStatus('ponto', pago.id, S.pois[pago.id].res), 'pendente', 'ponto pago');
+  });
+
+  teste('Status escolhido, código e prazo vencido', () => {
+    const S = novoEstado();
+    App.calc = T.compute();
+    const leg = App.calc.legs[1];
+    S.legs[leg.key].res = { st: 'pago', cod: 'ABC123', ate: '' };
+    const h = App.calc.route[0];
+    S.cities[h].res = { st: 'pendente', cod: '', ate: '2000-01-01' };
+    const r = App.reservas();
+    const t = r.find(x => x.id === leg.key);
+    igual([t.st, t.auto, t.res.cod], ['pago', false, 'ABC123']);
+    igual(r.find(x => x.tipo === 'hosp' && x.id === h).prazo, 'vencido');
+  });
+
+  teste('Sanitize: status desconhecido vira automático e prazo inválido some', () => {
+    const S = novoEstado();
+    S.pois['louvre'] = Object.assign(S.pois['louvre'] || {}, { res: { st: 'xyz', cod: 5, ate: 'amanhã' } });
+    T.sanitize(S);
+    igual(S.pois['louvre'].res, { st: '', cod: '', ate: '' });
+  });
+
+  grupo('Bagagem');
+
+  teste('Avião dentro da Europa soma a mala; trem e voo internacional não', () => {
+    const S = novoEstado();
+    App.calc = T.compute();
+    // trecho com avião cuja estimativa NÃO inclui a mala (Paris → Cracóvia já inclui)
+    const aviao = App.calc.legs.find(l => !l.intl && l.opts.aviao && !l.opts.aviao.comMala);
+    ok(aviao, 'precisa de um trecho com avião sem mala inclusa');
+    S.legs[aviao.key].modo = 'aviao';
+    App.calc = T.compute();
+    const l = App.calc.legs.find(x => x.key === aviao.key), mala = App.toBRL(D.config.malaLowCost.v, D.config.malaLowCost.cur);
+    perto(l.custo.mala, mala, 0.01, 'mala somada');
+    const comMala = App.calc.cats.trechos;
+    S.legs[aviao.key].mala.on = false;
+    App.calc = T.compute();
+    perto(comMala - App.calc.cats.trechos, mala, 0.01, 'desligar a mala');
+    ok(App.calc.legs.filter(x => x.intl).every(x => !x.custo.mala), 'voo internacional sem mala');
+    ok(App.calc.legs.filter(x => x.modo === 'trem').every(x => !x.custo.mala), 'trem sem mala');
+  });
+
+  teste('Tarifa que já inclui a mala (comMala) não soma de novo', () => {
+    const S = novoEstado();
+    App.calc = T.compute();
+    const l = App.calc.legs.find(x => x.opts.aviao && x.opts.aviao.comMala);
+    ok(l, 'precisa de Paris → Cracóvia no padrão');
+    S.legs[l.key].modo = 'aviao';
+    App.calc = T.compute();
+    igual(App.calc.legs.find(x => x.key === l.key).custo.mala, 0);
+  });
+
+  teste('Bate-volta de avião: mala na ida e na volta', () => {
+    const S = novoEstado();
+    S.cities.liverpool.sel = true; S.cities.liverpool.bv = 'londres';
+    App.calc = T.compute();
+    const key = App.calc.bvByCity.liverpool.leg.key;
+    S.legs[key].modo = 'aviao';
+    App.calc = T.compute();
+    const b = App.calc.bvByCity.liverpool;
+    if (b.leg.modo !== 'aviao') return;          // trecho sem opção de avião: nada a testar
+    perto(b.leg.custo.mala, 2 * App.toBRL(D.config.malaLowCost.v, D.config.malaLowCost.cur), 0.01);
+  });
+
+  grupo('Edição em conjunto');
+
+  teste('Mesclar: mudanças em campos diferentes não se perdem (inclusive tirar cidade)', () => {
+    const C = window.Colab;
+    const S = novoEstado(); S.cities.roma.sel = true; S.cities.roma.ordem = 50;
+    const base = C.dados(S);
+    const L = JSON.parse(JSON.stringify(S)); L.cities.paris.noites = 6; L.cities.roma.sel = false;      // eu: + noites em Paris, tiro Roma
+    const R = JSON.parse(JSON.stringify(S)); R.cities.londres.noites = 5; R.pois['liv-cavern'].sel = true; // outra pessoa
+    R.legs['x~y'] = { modo: 'trem' };
+    const m = C.mesclar(base, C.dados(L), C.dados(R));
+    igual([m.cities.paris.noites, m.cities.roma.sel, m.cities.londres.noites, m.pois['liv-cavern'].sel], [6, false, 5, true]);
+  });
+
+  teste('Mesclar: no mesmo campo vale a minha mudança (a última a chegar)', () => {
+    const C = window.Colab, S = novoEstado(), base = C.dados(S);
+    const L = JSON.parse(JSON.stringify(S)); L.cities.paris.noites = 7;
+    const R = JSON.parse(JSON.stringify(S)); R.cities.paris.noites = 2;
+    igual(C.mesclar(base, C.dados(L), C.dados(R)).cities.paris.noites, 7);
+  });
+
+  teste('Dados sincronizados não levam câmbio, filtros nem carimbo de hora', () => {
+    const S = novoEstado(); S.tag = 'Museu'; S.cambioModo = 'manual'; S.cambio.EUR = 9;
+    const d = window.Colab.dados(S);
+    ok(!('tag' in d) && !('cambio' in d) && !('cambioModo' in d), Object.keys(d).join());
+    ok((d.cenarios || []).every(c => !('alterado' in c)), 'alterado');
+  });
+
+  teste('Fluxo com o Worker: cria, outro salva antes (409), mescla e envia', async () => {
+    const C = window.Colab, fetchReal = window.fetch, urlReal = D.config.linkCurtoUrl;
+    const servidor = { v: 0, dados: null }, puts = [];
+    D.config.linkCurtoUrl = 'https://links.teste.workers.dev';
+    window.fetch = (url, o) => {
+      const u = new URL(url), m = (o && o.method) || 'GET', corpo = o && o.body ? JSON.parse(o.body) : null;
+      const resp = (j, st) => Promise.resolve(new Response(JSON.stringify(j), { status: st || 200 }));
+      if (m === 'POST') { servidor.v = 1; servidor.dados = corpo.dados; return resp({ id: 'ABCDEFGHIJKL', v: 1 }); }
+      if (m === 'PUT') {
+        puts.push(+u.searchParams.get('base'));
+        if (+u.searchParams.get('base') !== servidor.v) return resp({ v: servidor.v, dados: servidor.dados }, 409);
+        servidor.v++; servidor.dados = corpo.dados; return resp({ v: servidor.v });
+      }
+      return resp({ v: servidor.v, dados: servidor.dados });
+    };
+    const refreshReal = App.refresh;
+    App.refresh = () => { App.calc = T.compute(); };
+    try {
+      const S = novoEstado(); App.calc = T.compute();
+      const link = await C.criar();
+      ok(/#e=ABCDEFGHIJKL$/.test(link), link);
+      // outra pessoa salva antes: + Roma
+      const outro = JSON.parse(JSON.stringify(S)); outro.cities.roma.sel = true; outro.cities.roma.ordem = 50;
+      servidor.v = 2; servidor.dados = C.dados(outro);
+      // eu mudo as noites de Paris e salvo
+      App.state.cities.paris.noites = 6;
+      C.mudou();
+      await new Promise(r => setTimeout(r, 2600));
+      ok(puts[0] === 1 && puts[puts.length - 1] === 2, 'PUTs: ' + puts.join());
+      igual([servidor.v, servidor.dados.cities.paris.noites, servidor.dados.cities.roma.sel], [3, 6, true], 'servidor com as duas mudanças');
+      igual([App.state.cities.paris.noites, App.state.cities.roma.sel], [6, true], 'tela com as duas mudanças');
+    } finally {
+      window.Colab._t.set(null);
+      try { window.localStorage.removeItem('viagem-europa:colab'); } catch (e) { /* ok */ }
+      window.fetch = fetchReal; D.config.linkCurtoUrl = urlReal; App.refresh = refreshReal;
+    }
+  });
+
   grupo('Links curtos');
 
   // Simula o Worker (worker/roteiro.js) trocando o fetch durante o teste.

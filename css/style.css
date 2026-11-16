@@ -1066,3 +1066,64 @@ input[type=text]:focus, input[type=url]:focus { outline: none; border-color: var
 /* dia a dia: dia da base ocupado pelo bate-volta */
 .dd-day.bvday { border-style: dashed; }
 .dd-day.bvday .dd-head small { color: var(--accent); }
+
+/* ================================================================== RESERVAS */
+.res-selo {
+  flex: none; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap;
+  font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 2px 7px; border: 1px solid var(--line); color: #bdbdbd;
+}
+.res-selo.pendente { border-color: var(--accent); color: var(--accent); }
+.res-selo.reservado { border-color: #8a8a8a; color: var(--text); }
+.res-selo.pago { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.res-selo.auto { border-style: dashed; }
+.poirow .res-selo { align-self: center; margin-right: 4px; }
+.res-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0 2px; }
+.res-t { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #bdbdbd; margin-right: 2px; }
+.res-row select, .res-row input {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font: inherit; font-size: 12.5px;
+}
+.res-row.res-pendente select { border-color: var(--accent); }
+.res-row.res-pago select { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+.res-cod { flex: 1; min-width: 120px; }
+.res-ate { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); }
+.resbox { margin: 12px 0; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); }
+.resbox.urg { border-color: var(--accent); }
+.res-head {
+  width: 100%; border: 0; background: none; color: var(--text); text-align: left; padding: 9px 11px;
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center;
+}
+.res-head b { font-size: 13px; }
+.res-head small { font-size: 11.5px; }
+.res-meter { grid-column: 1 / -1; height: 4px; border-radius: 4px; background: var(--panel-3); overflow: hidden; }
+.res-meter i { display: block; height: 100%; background: var(--accent); }
+.res-falta { grid-row: 1; grid-column: 2; font-size: 11.5px; color: var(--accent); font-weight: 600; white-space: nowrap; }
+.res-ok { grid-row: 1; grid-column: 2; font-size: 11.5px; color: #c9c9c9; }
+.res-body { padding: 0 11px 10px; border-top: 1px solid var(--line); }
+.res-body h5 { margin: 10px 0 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em; color: #bdbdbd; }
+.res-list { list-style: none; margin: 0; padding: 0; }
+.res-list li { display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.res-list li small { grid-column: 1; font-size: 11px; }
+.res-list li .lnk { justify-self: start; text-align: left; }
+.res-list li .res-selo { grid-row: 1 / 3; grid-column: 2; }
+.res-list li.vencido small b, .res-list li.perto small b { color: var(--accent); }
+
+/* ================================================================== BAGAGEM */
+.bag { font-size: 12px; color: #bdbdbd; margin: 8px 0 2px; line-height: 1.45; }
+.bag-ic { margin-right: 5px; }
+.bag.ok { color: var(--muted); }
+div.bag.warn { background: var(--panel-2); border-left: 2px solid var(--accent); border-radius: 0 8px 8px 0; padding: 7px 9px; }
+div.bag.warn p { margin: 0 0 4px; }
+div.bag.warn b { color: var(--accent); }
+
+/* ======================================================= EDIÇÃO EM CONJUNTO */
+#colabchip[hidden] { display: none; }
+.btn.colab { border-color: var(--accent); color: var(--text); gap: 6px; }
+.btn.colab i { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); display: inline-block; }
+.btn.colab.enviando i { animation: pulse-dot 1s ease-in-out infinite; }
+.btn.colab.erro i, .btn.colab.offline i { background: #8a8a8a; }
+.btn.colab small { color: var(--muted); font-size: 11px; }
+@keyframes pulse-dot { 50% { opacity: .25; } }
+.colab-box { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.colab-box h4 { margin: 0 0 4px; }
+.colab-box.on h4 { color: var(--accent); }
+.colab-box .sh-btns { flex-wrap: wrap; }

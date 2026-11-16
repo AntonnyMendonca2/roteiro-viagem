@@ -52,6 +52,8 @@
       if (isObj(l.hospedagem) && igual(l.hospedagem, hp)) delete l.hospedagem;
       if (isObj(l.real) && (l.real.v === '' || l.real.v == null)) delete l.real;
       ['horas', 'partida'].forEach(x => { if (isObj(l[x]) && !Object.keys(l[x]).length) delete l[x]; });
+      if (isObj(l.mala) && l.mala.on === true && l.mala.v === D.config.malaLowCost.v && l.mala.cur === D.config.malaLowCost.cur) delete l.mala;
+      if (isObj(l.res) && !l.res.st && !l.res.cod && !l.res.ate) delete l.res;
       if (!Object.keys(l).length) delete o.legs[k];
     });
     if (isObj(o.cities)) Object.keys(o.cities).forEach(id => {
@@ -292,7 +294,8 @@
   };
 
   function lerHash() {
-    const h = window.location.hash || '', m = /^#r=(.+)$/.exec(h), s = /^#s=([A-Za-z0-9_-]{10})$/.exec(h);
+    const h = window.location.hash || '', m = /^#r=(.+)$/.exec(h), s = /^#s=([A-Za-z0-9_-]{10})$/.exec(h), e = /^#e=([A-Za-z0-9_-]{12})$/.exec(h);
+    if (e) { limparHash(); window.Colab.entrar(e[1]); return; }
     if (!m && !s) return;
     if (s) window.UI.toast('Abrindo o roteiro compartilhado…', 2500);
     (s ? Comp.buscar(s[1]) : Promise.resolve(m[1])).then(Comp.decodificar).then(Comp.receber).catch(e => {
@@ -347,9 +350,10 @@
       '<div class="sh-btns"><button type="button" class="btn sm primary" data-act="share-copy">Copiar link</button>' +
       (navigator.share ? '<button type="button" class="btn sm" data-act="share-native">Enviar…</button>' : '') + '</div>' +
       (local ? '<p class="muted">Você abriu o app direto do arquivo (<code>file://</code>): este link só funciona neste computador. Publique no GitHub Pages para mandar a outras pessoas.</p>' : '') +
-      '<div id="sh-qr" class="sh-qr"></div>';
+      '<div id="sh-qr" class="sh-qr"></div>' + window.Colab.html();
     gerar();
   }
+  Comp.renderJanela = renderJanela;
 
   function gerar() {
     const meuPedido = ++pedido;

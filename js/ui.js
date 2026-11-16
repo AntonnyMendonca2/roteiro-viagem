@@ -246,6 +246,7 @@
       (D.config.viajantes || 1) + ((D.config.viajantes || 1) > 1 ? ' pessoas' : ' pessoa') + '</p>' +
       '<div class="links tight">' + linkBtns(UI.linksHosp(c, seg)) + '</div>';
     if (!cs.sel) return html;
+    if (seg) html += resRow('hosp', c.id, cs.res, 'cities.' + c.id + '.res', 'Reserva');
     html += '<div class="hosp-box"><div class="field"><label for="f-hn-' + c.id + '">Minha hospedagem <small>nome ou endereço</small></label>' +
       '<input type="text" id="f-hn-' + c.id + '" data-fid="f-hn-' + c.id + '" data-path="cities.' + c.id + '.hosp.nome" placeholder="Ex.: Generator Paris" value="' + esc(cs.hosp.nome) + '"></div>' +
       linkField('f-hl-' + c.id, 'Link da hospedagem <small>Airbnb, Booking, reserva…</small>', 'cities.' + c.id + '.hosp.link', cs.hosp.link, 'https://www.airbnb.com.br/rooms/…');
@@ -342,6 +343,7 @@
         case 'mode': App.setLegMode(t.dataset.leg, t.dataset.mode); break;
         case 'bv-set': App.setBV(id, t.dataset.base); break;
         case 'bv-off': App.setBV(id, ''); break;
+        case 'res-toggle': UI.resAberto = !UI.resAberto; UI.renderAll(); break;
         case 'bv-exp': UI.bvAberto[id] = !UI.bvAberto[id]; UI.renderAll(); break;
         case 'back': {
           const f = App.focus;
@@ -395,7 +397,7 @@
       if (!t.dataset.path) return;
       if ('link' in t.dataset) { A().set(t.dataset.path, UI.limparLink(t.value)); A().refresh(); return; }
       if (t.type === 'checkbox') A().set(t.dataset.path, t.checked);
-      else if (t.type === 'date') { if (!t.value) return; A().set(t.dataset.path, t.value); }
+      else if (t.type === 'date') { if (!t.value && !('vazio' in t.dataset)) return; A().set(t.dataset.path, t.value); }
       else if (t.tagName === 'SELECT') A().set(t.dataset.path, t.value);
       else return;
       A().refresh('full' in t.dataset ? undefined : 'light');
@@ -666,6 +668,75 @@
     if (tab === 'assistente' && window.Assistente.busca) window.Assistente.filtrar();
   }
 
+  /* ============================================================ reservas */
+  UI.resAberto = false;
+  const RES_IC = { nao: '–', pendente: '!', reservado: '◔', pago: '✓' };
+  // Selo do status (lista de pontos, resumo).
+  UI.resSelo = (st, auto) => '<span class="res-selo ' + st + (auto ? ' auto' : '') + '" title="Reserva: ' + esc(A().RES[st]) + (auto ? ' (automático)' : '') + '">' + RES_IC[st] + ' ' + esc(A().RES[st]) + '</span>';
+  // Linha de reserva: status + código de confirmação + comprar até.
+  function resRow(tipo, id, res, path, titulo) {
+    const App = A(), st = App.resStatus(tipo, id, res), fid = path.replace(/[^\w-]/g, '_');
+    const auto = App.precisaReserva(tipo, id) ? 'A reservar' : 'Não precisa';
+    let h = '<div class="res-row res-' + st + '">' + (titulo ? '<span class="res-t">' + titulo + '</span>' : '') +
+      '<select data-full data-path="' + esc(path) + '.st" data-fid="rs-' + fid + '" aria-label="Status da reserva">' +
+      '<option value="">Automático · ' + auto + '</option>' +
+      Object.keys(App.RES).map(k => '<option value="' + k + '"' + (res.st === k ? ' selected' : '') + '>' + RES_IC[k] + ' ' + App.RES[k] + '</option>').join('') + '</select>';
+    if (st === 'reservado' || st === 'pago') {
+      h += '<input type="text" class="res-cod" data-path="' + esc(path) + '.cod" data-fid="rc-' + fid + '" placeholder="Código da reserva" value="' + esc(res.cod) + '" aria-label="Código da reserva">';
+    } else if (st === 'pendente') {
+      h += '<label class="res-ate"><span>Comprar até</span><input type="date" data-full data-vazio data-path="' + esc(path) + '.ate" data-fid="ra-' + fid + '" value="' + esc(res.ate) + '"></label>';
+    }
+    return h + '</div>';
+  }
+  UI.resRow = resRow;
+
+  // Quadro "Reservas" no topo do roteiro: contagem e o que falta, com prazos.
+  function resBox() {
+    const App = A(), lista = App.reservas(), conta = { nao: 0, pendente: 0, reservado: 0, pago: 0 };
+    lista.forEach(r => { conta[r.st]++; });
+    if (!lista.length) return '';
+    const falta = lista.filter(r => r.st === 'pendente').sort((a, b) => (b.prazo === 'vencido') - (a.prazo === 'vencido') || (b.prazo === 'perto') - (a.prazo === 'perto') || a.data - b.data);
+    const urg = falta.filter(r => r.prazo).length;
+    const ok = conta.reservado + conta.pago, tot = ok + conta.pendente;
+    let h = '<section class="resbox' + (urg ? ' urg' : '') + '"><button type="button" class="res-head" data-act="res-toggle" aria-expanded="' + UI.resAberto + '">' +
+      '<span><b>Reservas</b> <small>' + ok + ' de ' + tot + ' feitas' + (conta.pago ? ' · ' + conta.pago + ' pagas' : '') + '</small></span>' +
+      '<span class="res-meter" aria-hidden="true"><i style="width:' + (tot ? Math.round(ok / tot * 100) : 100) + '%"></i></span>' +
+      (falta.length ? '<span class="res-falta">' + falta.length + ' a reservar' + (urg ? ' · ' + urg + ' com prazo' : '') + ' ' + (UI.resAberto ? '▴' : '▾') + '</span>' : '<span class="res-ok">tudo reservado ✓</span>') + '</button>';
+    if (UI.resAberto) {
+      const item = r => {
+        const act = r.tipo === 'ponto' ? 'open-poi' : 'open-city', id = r.tipo === 'ponto' ? r.id : r.cityId;
+        return '<li class="' + (r.prazo || '') + '"><button type="button" class="lnk" data-act="' + act + '" data-id="' + esc(id) + '">' + esc(r.nome) + '</button>' +
+          '<small>' + Fmt.dow(r.data) + ' ' + Fmt.data(r.data) + ' · ' + esc(r.sub) +
+          (r.res.ate ? ' · <b>comprar até ' + Fmt.data(App.parseDate(r.res.ate)) + (r.prazo === 'vencido' ? ' (vencido)' : '') + '</b>' : '') + '</small>' + UI.resSelo(r.st, r.auto) + '</li>';
+      };
+      h += '<div class="res-body">' + (falta.length ? '<h5>A reservar</h5><ul class="res-list">' + falta.map(item).join('') + '</ul>' : '') +
+        (ok ? '<h5>Feitas</h5><ul class="res-list">' + lista.filter(r => r.st === 'reservado' || r.st === 'pago').map(item).join('') + '</ul>' : '') +
+        '<p class="muted">Trechos e hospedagens sempre pedem reserva; pontos, quando são pagos ou o site pede agendamento. Mude o status no próprio item (trecho, hospedagem ou ponto).</p></div>';
+    }
+    return h + '</section>';
+  }
+
+  // Bagagem do trecho no meio de transporte escolhido.
+  function bagagemHtml(leg) {
+    const App = A(), key = leg.key;
+    if (leg.modo === 'aviao' && leg.intl) {
+      return '<p class="bag"><span class="bag-ic" aria-hidden="true">🧳</span>Voo internacional: confira se a tarifa inclui mala despachada — as tarifas básicas ("Light", "Basic", "Discount") costumam incluir só a de mão.</p>';
+    }
+    if (leg.modo === 'aviao' && leg.opts.aviao.comMala) {
+      return '<p class="bag ok"><span class="bag-ic" aria-hidden="true">🧳</span>A estimativa deste voo já inclui a mala. Ao comprar, confira se a tarifa escolhida leva mala de mão grande ou despachada.</p>';
+    }
+    if (App.malaAparte(leg, leg.modo)) {
+      const m = leg.st.mala;
+      return '<div class="bag warn"><p><span class="bag-ic" aria-hidden="true">🧳</span><b>Mala à parte.</b> Nas companhias low-cost (Ryanair, easyJet, Wizz Air, Vueling…) a tarifa básica só leva um item pessoal (mochila embaixo do assento). Mala de mão grande ou despachada custa ~€20–60 por trecho.</p>' +
+        '<label class="check"><input type="checkbox" data-full data-fid="mala-' + esc(key) + '" data-path="legs.' + esc(key) + '.mala.on"' + (m.on ? ' checked' : '') + '><span>Somar mala no custo' + (leg.bv ? ' <small>(ida e volta)</small>' : '') + '</span></label>' +
+        (m.on ? money('Valor da mala (por trecho)', 'legs.' + key + '.mala') : '') + '</div>';
+    }
+    const txt = { trem: 'Bagagem inclusa: nos trens não há cobrança por mala (leve o que conseguir carregar).',
+      onibus: 'Bagagem inclusa: em geral 1 mala no bagageiro + 1 de mão; mala extra pode ser cobrada.',
+      balsa: 'Bagagem inclusa: a pé, as malas vão com você sem custo extra.' }[leg.modo];
+    return txt ? '<p class="bag ok"><span class="bag-ic" aria-hidden="true">🧳</span>' + txt + '</p>' : '';
+  }
+
   function legCard(leg) {
     const App = A(), key = esc(leg.key), o = leg.opts[leg.modo], tx = UI.legText(leg, leg.modo);
     const disp = App.MODOS.filter(m => leg.opts[m]);            // só os meios disponíveis neste trecho
@@ -691,6 +762,8 @@
       const f = App.flightsFor(leg.to === 'vcp' ? leg.from : leg.to).find(r => r.from === leg.from && r.to === leg.to);
       if (f) html += '<div class="links tight">' + linkBtns(UI.linksVoo(f.from, f.to, f.date)) + '</div>';
     }
+    html += bagagemHtml(leg);
+    html += resRow('trecho', leg.key, leg.st.res, 'legs.' + leg.key + '.res', 'Reserva');
     html += money(leg.bv ? 'Valor real (ida e volta)' : 'Valor real', 'legs.' + leg.key + '.real', leg.intl ? 'ou use "Voo internacional" no orçamento' : leg.bv ? 'as duas passagens somadas' : 'substitui a estimativa');
     html += linkField('f-ll-' + key, 'Link da passagem <small>a que eu encontrei</small>', 'legs.' + leg.key + '.link', leg.st.link, 'https://…');
     void App;
@@ -818,6 +891,7 @@
     let html = '<div class="field inline"><label for="f-saida">Data de saída</label>' +
       '<input id="f-saida" data-fid="f-saida" type="date" data-full data-path="dataSaida" value="' + esc(S.dataSaida) + '"></div>';
 
+    html += resBox();
     html += smartBox();
     html += '<ol class="itin">';
     html += '<li class="node">' + icon('aviao') + '<div><b>' + esc(D.origem.nome) + '</b><small>saída ' + Fmt.dow(ida.start) + ', ' + Fmt.data(ida.start) + '</small></div></li>';
@@ -930,7 +1004,8 @@
         '<button type="button" class="chk" data-act="toggle-poi" data-id="' + p.id + '" data-fid="tp-' + p.id + '" aria-pressed="' + on + '" aria-label="' +
         (on ? 'Remover do roteiro' : 'Incluir no roteiro') + '">✓</button>' +
         '<button type="button" class="pr-main" data-act="open-poi" data-id="' + p.id + '"><span class="pr-n">' + esc(p.nome) + (p.custom ? ' <i class="meu-tag" title="Adicionado por você">meu</i>' : '') + (w ? ' <i class="wdot" title="' + esc(w.texto) + '">!</i>' : '') + '</span>' +
-        '<span class="pr-m">' + esc(p.preco.label) + ' · ' + esc(UI.dist(p).curto) + (p.tags.length ? ' · ' + esc(p.tags.join(', ')) : '') + '</span></button></li>';
+        '<span class="pr-m">' + esc(p.preco.label) + ' · ' + esc(UI.dist(p).curto) + (p.tags.length ? ' · ' + esc(p.tags.join(', ')) : '') + '</span></button>' +
+        (on ? (st => (st === 'nao' ? '' : UI.resSelo(st, !S.pois[p.id].res.st)))(App.resStatus('ponto', p.id, S.pois[p.id].res)) : '') + '</li>';
     }).join('') : '<li class="empty">Nenhum ponto com a tag "' + esc(tag) + '" nesta cidade.</li>') + '</ul>';
     html += window.Futebol.cityHtml(c);
     html += window.Descobrir.cityHtml(c);
@@ -956,6 +1031,7 @@
       html += '<h4>Bate-volta</h4><p class="ref">' + esc(p.bateVolta.desc) + '</p>' +
         money('Transporte (ida e volta)', 'pois.' + p.id + '.transporte', '<span data-out="poi-tr:' + p.id + '"></span>');
     }
+    if (on) html += '<h4>Reserva</h4>' + resRow('ponto', p.id, ps.res, 'pois.' + p.id + '.res');
     if (!on) html += '<p class="muted">Os valores só entram no total quando o ponto está no roteiro.</p>';
     if (p.custom) html += '<p class="muted">Ponto adicionado por você. Informe o valor do ingresso acima (o padrão é 0).</p>';
 

@@ -19,6 +19,7 @@ window.DATA = {
     escalaFotosKm: 5,                 // fotos dos pontos somem quando a escala do mapa chega a este valor (km)
     viajantes: 1,                     // nº de pessoas nas buscas de voos e hospedagem
     hospedagemPernoite: { v: 80, cur: 'EUR' }, // estimativa de 1 noite em parada de trem
+    malaLowCost: { v: 35, cur: 'EUR' },        // mala de mão grande/despachada nas low-cost (por trecho de avião, por pessoa)
     // dia a dia: horários de cada tipo de dia e limites (veja js/diaadia.js)
     diaADia: { inicioH: 9, fimH: 19, chegadaH: 14, partidaH: 12, puxadoH: 10, bateVoltaLongoH: 4 },
     // links curtos (opcional): endereço do seu Cloudflare Worker (worker/roteiro.js; veja "Links curtos" no README).
@@ -448,7 +449,7 @@ window.DATA = {
       aviao: { desc: 'Voo direto', h: [1.25, 1.25], eur: [50, 120] } },
     { a: 'paris', b: 'cracovia', padrao: 'aviao',
       trem:  { desc: 'Via Berlim (pernoite recomendado)', h: [16, 18], eur: [90, 210], via: { cityId: 'berlim' }, pernoite: true },
-      aviao: { desc: 'Low-cost direto, com mala', h: [2.17, 2.17], eur: [50, 100] } },
+      aviao: { desc: 'Low-cost direto, com mala', h: [2.17, 2.17], eur: [50, 100], comMala: true } },
     { a: 'paris', b: 'berlim', padrao: 'trem',
       trem:  { desc: 'TGV direto', h: [8, 8], eur: [60, 150] },
       aviao: { desc: 'Voo direto', h: [1.75, 1.75], eur: [50, 120] } },

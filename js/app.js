@@ -92,10 +92,11 @@
       s.cities[c.id] = { sel: !!c.selecionada, noites: c.noites || 1, ordem: c.ordem || 99, custos,
         hosp: { nome: '', lat: null, lon: null, link: '' },   // minha hospedagem (marcada no mapa) + link do anúncio/reserva
         diaria: { hosp: '', gastos: '' },             // estimativas por dia para o assistente ('' = padrão do data.js)
+        res: { st: '', cod: '', ate: '' },            // reserva da hospedagem (status, código, prazo)
         bv: '', bvDia: '' };                          // bate-volta: cidade-base de onde se vai e volta no mesmo dia ('' = parada com pernoite) e o dia escolhido
     });
     D.pois.forEach(p => {
-      const ps = { sel: !!p.selecionado, valor: { v: p.preco.v, cur: p.preco.cur }, dia: '' };
+      const ps = { sel: !!p.selecionado, valor: { v: p.preco.v, cur: p.preco.cur }, dia: '', res: { st: '', cod: '', ate: '' } };
       if (p.bateVolta) ps.transporte = clone(p.bateVolta.custo);
       s.pois[p.id] = ps;
     });
@@ -152,6 +153,17 @@
   function save() {
     if (App.somenteLeitura) return;   // vendo um roteiro compartilhado: nada é salvo
     try { window.localStorage.setItem(LS_KEY, JSON.stringify(App.state)); } catch (e) { /* app funciona sem salvar */ }
+    if (window.Colab) window.Colab.mudou();       // edição em conjunto: envia a mudança
+  }
+
+  /* Reservas: status de cada ponto, trecho e hospedagem.
+     ''  = automático (o app decide se precisa reservar) · 'nao' = não precisa
+     'pendente' = a reservar · 'reservado' · 'pago'.  cod = código de confirmação · ate = comprar até (AAAA-MM-DD) */
+  App.RES = { nao: 'Não precisa', pendente: 'A reservar', reservado: 'Reservado', pago: 'Pago' };
+  function limparRes(r) {
+    r = isObj(r) ? r : {};
+    return { st: App.RES[r.st] ? r.st : '', cod: typeof r.cod === 'string' ? r.cod.slice(0, 80) : '',
+      ate: typeof r.ate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.ate) ? r.ate : '' };
   }
 
   function sanitize(s) {
@@ -161,7 +173,10 @@
       cs.noites = Math.max(1, Math.min(60, Math.round(num(cs.noites)) || 1));
       if (typeof cs.bv !== 'string' || !cityById[cs.bv] || cs.bv === c.id) cs.bv = '';
       if (typeof cs.bvDia !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(cs.bvDia)) cs.bvDia = '';
+      cs.res = limparRes(cs.res);
     });
+    Object.keys(s.pois).forEach(id => { if (isObj(s.pois[id])) s.pois[id].res = limparRes(s.pois[id].res); });
+    Object.keys(s.legs).forEach(k => { if (isObj(s.legs[k]) && s.legs[k].res !== undefined) s.legs[k].res = limparRes(s.legs[k].res); });
     normalizarBV(s);
     if (s.tag && D.tags.indexOf(s.tag) < 0) s.tag = null;
     if (!App.CRITERIOS[s.otim.criterio]) s.otim.criterio = 'tempo';
@@ -173,6 +188,7 @@
     s.customPois.forEach(p => {
       p.custom = true; p.tags = Array.isArray(p.tags) ? p.tags : []; p.duracaoH = num(p.duracaoH) || 1;
       if (!isObj(s.pois[p.id])) s.pois[p.id] = { sel: false, valor: { v: p.preco.v || 0, cur: p.preco.cur }, dia: '' };
+      s.pois[p.id].res = limparRes(s.pois[p.id].res);
       if (!isObj(s.pois[p.id].valor)) s.pois[p.id].valor = { v: 0, cur: p.preco.cur };
     });
     Object.keys(s.pois).forEach(id => { if (/^u-/.test(id) && !s.customPois.some(p => p.id === id)) delete s.pois[id]; });
@@ -378,6 +394,8 @@
     if (typeof st.link !== 'string') st.link = '';                // link da passagem que encontrei
     if (typeof st.pernoite !== 'boolean') st.pernoite = true;   // pernoite é o recomendado
     if (!isObj(st.hospedagem)) st.hospedagem = clone(D.config.hospedagemPernoite);
+    if (!isObj(st.mala)) st.mala = Object.assign({ on: true }, clone(D.config.malaLowCost));   // mala à parte (avião low-cost)
+    if (!isObj(st.res)) st.res = limparRes();
 
     const leg = { key, from, to, intl, est, aviso: def.aviso || '', st, opts: {} };
     MODOS.forEach(m => {
@@ -397,7 +415,8 @@
         via: viaInfo(o.via),
         vias: (o.vias || (o.via ? [o.via] : [])).map(viaInfo),     // paradas no caminho (mapa)
         pernoite: !!o.pernoite,
-        noturno: !!o.noturno
+        noturno: !!o.noturno,
+        comMala: !!o.comMala                                  // o preço da tabela já inclui a mala
       };
     });
     // melhor opção por terra (a mais rápida porta a porta) — usada no "cenário terrestre"
@@ -417,15 +436,27 @@
       noites = 1;
       pernoite = App.toBRL(st.hospedagem.v, st.hospedagem.cur);
     }
-    return { transporte, pernoite, noites, horas: o.horas, real: temReal };
+    const mala = malaDe(leg, modo, cenario);
+    return { transporte: transporte + mala, mala, pernoite, noites, horas: o.horas, real: temReal };
+  }
+
+  // Bagagem à parte: nos voos dentro da Europa (low-cost), a tarifa básica só leva um item pessoal.
+  // Nos comparativos de cenário ela sempre entra; no "meu roteiro", só se "somar mala" estiver ligado.
+  App.malaAparte = (leg, modo) => modo === 'aviao' && !leg.intl && !!leg.opts[modo] && !leg.opts[modo].comMala;
+  function malaDe(leg, modo, cenario) {
+    if (!App.malaAparte(leg, modo)) return 0;
+    const m = leg.st.mala;
+    if (cenario === 'meu' && !m.on) return 0;
+    return App.toBRL(m.v, m.cur);
   }
 
   // Custo de um bate-volta (ida e volta). O valor real, se informado, é o total das duas passagens.
   function bvCost(leg, modo) {
     const o = leg.opts[modo], st = leg.st;
     const temReal = modo === leg.modo && st.real.v !== '' && st.real.v != null;
-    const transporte = temReal ? App.toBRL(st.real.v, st.real.cur) : 2 * App.toBRL(o.eurMid, 'EUR');
-    return { transporte, pernoite: 0, noites: 0, horas: 2 * o.horas, real: temReal };
+    const mala = 2 * malaDe(leg, modo, 'meu');
+    const transporte = (temReal ? App.toBRL(st.real.v, st.real.cur) : 2 * App.toBRL(o.eurMid, 'EUR')) + mala;
+    return { transporte, mala, pernoite: 0, noites: 0, horas: 2 * o.horas, real: temReal };
   }
 
   /* ============================================================================
@@ -461,6 +492,10 @@
 
     const real = st && st.modo === modo && st.real && st.real.v !== '' && st.real.v != null;
     let brl = real ? App.toBRL(st.real.v, st.real.cur) : App.toBRL((o.eur[0] + o.eur[1]) / 2, 'EUR');
+    if (modo === 'aviao' && !o.comMala && (!st || !isObj(st.mala) || st.mala.on)) {
+      const m = st && isObj(st.mala) ? st.mala : D.config.malaLowCost;
+      brl += App.toBRL(m.v, m.cur);
+    }
     if (o.pernoite && (!st || st.pernoite !== false)) {
       const h = st && isObj(st.hospedagem) ? st.hospedagem : D.config.hospedagemPernoite;
       brl += App.toBRL(h.v, h.cur);
@@ -802,6 +837,52 @@
     return c.legs.find(l => l.key === key) || (c.bvs || []).map(b => b.leg).find(l => l.key === key) || null;
   };
 
+  // O item precisa de reserva? (para o status automático)
+  const PEDE_RESERVA = /reserv|ingresso|esgot|agend|antecedência/i;
+  App.precisaReserva = function (tipo, id) {
+    if (tipo !== 'ponto') return true;                                // trechos e hospedagens: sempre
+    const p = App.poi(id), ps = App.state.pois[id];
+    if (!p || !ps) return false;
+    return num(ps.valor && ps.valor.v) > 0 || (p.avisos || []).some(a => PEDE_RESERVA.test(a));
+  };
+  // Status efetivo: o escolhido ou, no automático, 'pendente' / 'nao'.
+  App.resStatus = function (tipo, id, res) {
+    if (res && res.st) return res.st;
+    return App.precisaReserva(tipo, id) ? 'pendente' : 'nao';
+  };
+
+  // Tudo o que é reservável na viagem, em ordem de data:
+  // { tipo: 'trecho'|'hosp'|'ponto', id, nome, sub, data, st, auto, res, path, cityId, prazo: 'vencido'|'perto'|'' }
+  App.reservas = function () {
+    const S = App.state, c = App.calc, out = [], hoje = App.parseDate(App.iso(new Date()));
+    const nomeDe = id => (id === 'vcp' ? D.origem.nomeCurto : cityById[id].nome);
+    const add = (tipo, id, nome, sub, data, res, path, cityId) => {
+      const st = App.resStatus(tipo, id, res);
+      let prazo = '';
+      if (res.ate && (st === 'pendente')) {
+        const dias = Math.round((App.parseDate(res.ate) - hoje) / 86400000);
+        prazo = dias < 0 ? 'vencido' : dias <= 14 ? 'perto' : '';
+      }
+      out.push({ tipo, id, nome, sub, data, st, auto: !res.st, res, path, cityId, prazo });
+    };
+    c.legs.forEach((l, i) => {
+      const data = i === 0 ? App.parseDate(S.dataSaida) : l.to === 'vcp' ? c.segs[c.segs.length - 1].start : c.segByCity[l.to].start;
+      add('trecho', l.key, nomeDe(l.from) + ' → ' + nomeDe(l.to), (l.intl ? 'Voo internacional' : UI.MODO[l.modo]), data, l.st.res, 'legs.' + l.key + '.res', l.to === 'vcp' ? l.from : l.to);
+    });
+    c.bvs.forEach(b => add('trecho', b.leg.key, nomeDe(b.base) + ' ⇄ ' + nomeDe(b.cityId), 'Bate-volta · ' + UI.MODO[b.leg.modo], b.date, b.leg.st.res, 'legs.' + b.leg.key + '.res', b.cityId));
+    c.route.forEach(id => {
+      const seg = c.segByCity[id];
+      add('hosp', id, 'Hospedagem em ' + cityById[id].nome, seg.nights + (seg.nights === 1 ? ' noite' : ' noites'), seg.start, S.cities[id].res, 'cities.' + id + '.res', id);
+    });
+    App.pois().forEach(p => {
+      if (!App.poiActive(p.id)) return;
+      const ps = S.pois[p.id], dias = App.cityDays(p.cityId);
+      const d = ps.dia ? App.parseDate(ps.dia) : dias[0];
+      add('ponto', p.id, p.nome, cityById[p.cityId].nome, d || App.parseDate(S.dataSaida), ps.res, 'pois.' + p.id + '.res', p.cityId);
+    });
+    return out.sort((a, b) => a.data - b.data);
+  };
+
   /* --------------------------------------------------------------- atualização */
   // modo 'light': só números (não recria formulários, para não perder o foco ao digitar).
   // Margem para considerar uma ordem "melhor" (evita reordenar por diferenças desprezíveis).
@@ -996,7 +1077,7 @@
   App.addCustomPoi = function (p) {
     const S = App.state;
     S.customPois.push(p);
-    S.pois[p.id] = { sel: !!S.cities[p.cityId].sel, valor: { v: p.preco.v || 0, cur: p.preco.cur }, dia: '' };
+    S.pois[p.id] = { sel: !!S.cities[p.cityId].sel, valor: { v: p.preco.v || 0, cur: p.preco.cur }, dia: '', res: limparRes() };
     MapView.rebuildPois();
     App.refresh();
     return p;
@@ -1153,6 +1234,7 @@
     window.Assistente.bind();
     window.Cenarios.bind();
     window.Compartilhar.bind();
+    window.Colab.bind();
     window.Futebol.bind();
     UI.renderAll();
     window.Cenarios.render();
@@ -1169,7 +1251,8 @@
     window.Trilhos.carregar();
     window.Futebol.carregar();
     window.Cambio.init();   // busca as cotações (modo automático) e o histórico de 90 dias
-    window.Compartilhar.iniciar();   // link com #r=...: mostra o roteiro compartilhado em modo leitura
+    window.Colab.iniciar();          // edição em conjunto salva neste navegador: volta a sincronizar
+    window.Compartilhar.iniciar();   // link com #r=/#s=: modo leitura · #e=: edição em conjunto
 
     document.addEventListener('keydown', e => {
       if (e.key !== 'Escape') return;

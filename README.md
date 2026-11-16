@@ -69,6 +69,7 @@ js/diaadia.js   roteiro dia a dia automático de cada cidade
 js/assistente.js assistente "Tenho X dias e R$ Y: o que cabe?" (otimizador em Web Worker)
 js/cenarios.js   cenários A/B/C: versões do roteiro e comparação lado a lado
 js/compartilhar.js link de compartilhamento (roteiro dentro do link), QR code, mesclar
+js/colab.js       edição em conjunto (sincroniza o roteiro pelo Worker de links curtos)
 js/futebol.js    clubes, jogos cadastrados à mão, avisos de data e busca automática opcional
 js/data-futebol.js clubes de cada cidade, DATA.jogos e o endereço do proxy opcional
 worker/futebol.js Cloudflare Worker opcional (guarda a chave da football-data.org)
@@ -217,6 +218,22 @@ Se você quiser que os jogos apareçam sozinhos, crie um **Cloudflare Worker** q
 
 Com isso, o app busca os jogos **em casa** dos clubes das cidades do roteiro (dois dias antes da chegada até dois dias depois da saída), guarda por 12 horas e mostra com a etiqueta "automático". O Worker só aceita os domínios autorizados, só repassa a consulta "jogos de um time entre duas datas" e guarda cada resposta por 6 horas. O plano grátis da football-data.org cobre as grandes ligas (Inglaterra, Alemanha, Espanha, Itália, França, Holanda, Portugal e a Champions); os clubes cobertos têm o campo `fd` (número do time na API) no `js/data-futebol.js` — os números foram anotados de memória: se algum clube não trouxer jogos, confira o número em `https://api.football-data.org/v4/competitions/<liga>/teams`. Clubes de outras ligas (ex.: a polonesa) continuam só com o cadastro à mão. Não funciona em `file://` (o navegador não envia o domínio).
 
+### Reservas
+
+Cada **trecho**, **hospedagem** e **ponto de interesse** tem um status de reserva: *Automático*, *Não precisa*, *A reservar*, *Reservado* ou *Pago*.
+
+- No automático, trechos e hospedagens sempre pedem reserva; pontos pedem quando são pagos ou quando o aviso do ponto fala em reserva/ingresso/agendamento.
+- *Reservado* e *Pago* mostram o campo do **código da reserva**; *A reservar* mostra **Comprar até** (prazo). Prazo vencido ou a até 14 dias aparece em destaque.
+- O quadro **Reservas**, no topo de *Meu roteiro*, mostra quantas já foram feitas e, expandido, a lista do que falta (prazos primeiro) e do que já está reservado — cada item abre o trecho/cidade/ponto.
+
+### Bagagem
+
+O cartão de cada trecho diz como fica a bagagem no meio de transporte escolhido:
+
+- **Avião dentro da Europa:** nas low-cost a tarifa básica só leva um item pessoal. **Somar mala no custo** vem ligado e soma `DATA.config.malaLowCost` (padrão €35 por trecho; editável em cada trecho — no bate-volta, ida e volta). Nos comparativos *Cenário avião* e na rota inteligente por custo a mala sempre entra. Trechos cuja estimativa já inclui a mala têm `comMala: true` na tabela.
+- **Voo internacional:** aviso para conferir se a tarifa inclui mala despachada.
+- **Trem, ônibus e balsa:** bagagem inclusa.
+
 ### Bate-volta de cidade
 
 Qualquer cidade pode ser visitada **em um dia, indo e voltando** a partir de uma cidade do roteiro, sem pernoite (ex.: Liverpool a partir de Londres, Madri a partir de Barcelona):
@@ -261,6 +278,16 @@ Com vários cenários, pontos e valores, o link completo passa de 2 mil caracter
 6. Copie o endereço do Worker (ex.: `https://links.seu-usuario.workers.dev`) para `linkCurtoUrl`, no `DATA.config` do `js/data.js`, e publique.
 
 Com isso, **Compartilhar** passa a mostrar o link curto (o QR code também fica bem menor), com a opção **Copiar o link completo**, que não depende do servidor. Se o Worker estiver fora do ar, a janela avisa e mostra o link completo. Os links `#r=` antigos continuam abrindo. Importante: o link curto só funciona enquanto o roteiro estiver no seu KV; se você apagar o Worker ou o namespace, ele para de abrir.
+
+### Edição em conjunto
+
+Precisa do Worker de links curtos (abaixo) com o código atual de `worker/roteiro.js`. Em **Compartilhar → Editar junto → Criar link de edição**, o app gera um link `…/#e=<código>`:
+
+- Quem abrir o link entra no mesmo roteiro (o roteiro dele fica guardado e volta ao sair). Cada mudança é enviada ~1,5 s depois; a cada ~12 s (e ao voltar para a aba) o app busca as mudanças dos outros. A barra superior mostra **Editando junto · sincronizado**.
+- Se duas pessoas salvarem ao mesmo tempo, o app **mescla**: mudanças em campos diferentes ficam as duas; no mesmo campo, vale a última a chegar.
+- Câmbio, spread/IOF e filtros continuam pessoais.
+- **Quem tiver o link de edição pode mudar o roteiro** — mande só para quem vai planejar com você. *Sair (fico com uma cópia)* ou *Sair e voltar ao meu roteiro* encerram.
+- O KV da Cloudflare pode levar até ~1 minuto para mostrar uma mudança em outra região do mundo; entre pessoas no mesmo país costuma ser imediato. Cada mudança salva conta como 1 gravação (o plano grátis permite 1.000 por dia).
 
 ## APIs externas
 
