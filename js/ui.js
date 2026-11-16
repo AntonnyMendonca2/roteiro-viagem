@@ -262,6 +262,9 @@
         '<div class="money-in"><input type="text" id="f-hosp-' + c.id + '" data-fid="f-hosp-' + c.id + '" placeholder="https://www.google.com/maps/… ou 48.85, 2.35">' +
         '<button type="button" class="btn" data-act="hosp-paste" data-id="' + c.id + '">Usar</button></div></div>';
     }
+    // valor da hospedagem (o mesmo campo "Hospedagem (total)" dos gastos da cidade)
+    html += '<div class="hosp-valor">' + money('Valor da hospedagem', 'cities.' + c.id + '.custos.hospedagem',
+      (seg ? 'total das ' + noitesTxt(seg.nights) + ' · ' : '') + '<span data-out="hosp-brl:' + c.id + '"></span>') + '</div>';
     return html + '</div>';
   }
 
@@ -987,7 +990,7 @@
     html += window.Clima.cityHtml(c);
 
     if (cs.sel) {
-      html += '<h4>Gastos na cidade</h4>' + D.categorias.filter(k => !bv || k.id !== 'hospedagem').map(k => money(k.nome, 'cities.' + c.id + '.custos.' + k.id)).join('');
+      html += '<h4>Gastos na cidade</h4>' + D.categorias.filter(k => k.id !== 'hospedagem').map(k => money(k.nome, 'cities.' + c.id + '.custos.' + k.id)).join('');
       if (!bv) html += window.Assistente.cityHtml(c);
     }
     if (!bv) html += hospSection(c) + '<h4>Passagens aéreas</h4>' + UI.flightRows(c.id);
@@ -1106,6 +1109,10 @@
       else if (kind === 'leg-cost' && legs[id]) {
         const r = legs[id].custo;
         txt = r.transporte || r.pernoite ? '≈ ' + Fmt.brl(r.transporte + r.pernoite) + (r.real ? ' (valor real)' : '') : '';
+      } else if (kind === 'hosp-brl') {
+        const o = S.cities[id] && S.cities[id].custos.hospedagem, seg = c.segByCity[id];
+        const brl = o ? App.toBRL(o.v, o.cur) : 0;
+        txt = brl ? (o.cur !== 'BRL' ? '≈ ' + Fmt.brl(brl) : '') + (seg && seg.nights > 1 ? (o.cur !== 'BRL' ? ' · ' : '') + Fmt.brl(brl / seg.nights) + '/noite' : '') : '';
       } else if (kind === 'poi-brl' || kind === 'poi-tr') {
         const o = S.pois[id] && S.pois[id][kind === 'poi-brl' ? 'valor' : 'transporte'];
         txt = o && o.cur !== 'BRL' && App.num(o.v) ? '≈ ' + Fmt.brl(App.toBRL(o.v, o.cur)) : '';

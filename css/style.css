@@ -1127,3 +1127,7 @@ div.bag.warn b { color: var(--accent); }
 .colab-box h4 { margin: 0 0 4px; }
 .colab-box.on h4 { color: var(--accent); }
 .colab-box .sh-btns { flex-wrap: wrap; }
+
+/* valor da hospedagem dentro do quadro "Minha hospedagem" */
+.hosp-valor { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.hosp-valor .field { margin: 0; }
