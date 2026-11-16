@@ -67,7 +67,14 @@
      tipo: 'ok' (estou na cidade) · 'chegada' · 'saida' (dia de trocar de cidade)
            'antes' (o jogo é antes de eu chegar) · 'depois' (já fui embora) · 'fora' (cidade fora do roteiro) */
   Fut.situacao = function (j, calc) {
-    const App = A(), seg = (calc || App.calc).segByCity[j.cityId], nome = App.city(j.cityId).nome;
+    const App = A(), C = calc || App.calc, seg = C.segByCity[j.cityId], nome = App.city(j.cityId).nome;
+    const bv = C.bvByCity && C.bvByCity[j.cityId];
+    if (bv) {                       // bate-volta: um dia só
+      const d = App.parseDate(j.data).getTime(), t = bv.date.getTime(), n = Math.round(Math.abs(d - t) / DIA), dias = n + (n === 1 ? ' dia' : ' dias');
+      if (d === t) return { tipo: 'ok', ok: true, texto: 'É o dia do seu bate-volta a ' + nome + ' — confira o horário do trem de volta' };
+      return d < t ? { tipo: 'antes', ok: false, dias: n, texto: 'O jogo é ' + dias + ' antes do seu bate-volta a ' + nome }
+        : { tipo: 'depois', ok: false, dias: n, texto: 'O jogo é ' + dias + ' depois do seu bate-volta a ' + nome };
+    }
     if (!seg) return { tipo: 'fora', ok: false, texto: nome + ' não está no roteiro' };
     const d = App.parseDate(j.data).getTime(), ini = seg.start.getTime(), fim = seg.end.getTime();
     const dias = n => n + (n === 1 ? ' dia' : ' dias');
@@ -172,7 +179,7 @@
 
   /* ============================================================ ações da interface */
   function abrirForm(cityId, j) {
-    const App = A(), seg = App.calc.segByCity[cityId];
+    const App = A(), seg = App.calc.segByCity[cityId] || App.calc.bvByCity[cityId];
     form = { cityId, id: j ? j.id : null, campos: j ? { data: j.data, hora: j.hora, casa: j.casa, fora: j.fora, comp: j.comp, estadio: j.estadio, ingressos: j.ingressos }
       : { data: seg ? App.iso(seg.start) : App.state.dataSaida, hora: '', casa: '', fora: '', comp: '', estadio: '', ingressos: '' } };
     App.refresh();
@@ -250,8 +257,8 @@
     const base = String(D.config.futebolProxyUrl || '').replace(/\/+$/, '');
     if (!/^https:\/\//.test(base)) return;
     const App = A();
-    App.calc.route.forEach(cid => {
-      const seg = App.calc.segByCity[cid];
+    App.calc.route.concat(App.calc.bvs.map(b => b.cityId)).forEach(cid => {
+      const seg = App.calc.segByCity[cid] || App.calc.bvByCity[cid];
       Fut.clubes(cid).filter(k => k.fd).forEach(k => {
         const de = App.iso(App.addDays(seg.start, -2)), ate = App.iso(App.addDays(seg.end, 2));
         const chave = k.id + '|' + de + '|' + ate;

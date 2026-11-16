@@ -91,7 +91,8 @@
       D.categorias.forEach(k => { custos[k.id] = { v: '', cur: 'BRL' }; });
       s.cities[c.id] = { sel: !!c.selecionada, noites: c.noites || 1, ordem: c.ordem || 99, custos,
         hosp: { nome: '', lat: null, lon: null, link: '' },   // minha hospedagem (marcada no mapa) + link do anúncio/reserva
-        diaria: { hosp: '', gastos: '' } };           // estimativas por dia para o assistente ('' = padrão do data.js)
+        diaria: { hosp: '', gastos: '' },             // estimativas por dia para o assistente ('' = padrão do data.js)
+        bv: '', bvDia: '' };                          // bate-volta: cidade-base de onde se vai e volta no mesmo dia ('' = parada com pernoite) e o dia escolhido
     });
     D.pois.forEach(p => {
       const ps = { sel: !!p.selecionado, valor: { v: p.preco.v, cur: p.preco.cur }, dia: '' };
@@ -155,7 +156,13 @@
 
   function sanitize(s) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(s.dataSaida || '')) s.dataSaida = D.config.dataSaida;
-    D.cities.forEach(c => { s.cities[c.id].noites = Math.max(1, Math.min(60, Math.round(num(s.cities[c.id].noites)) || 1)); });
+    D.cities.forEach(c => {
+      const cs = s.cities[c.id];
+      cs.noites = Math.max(1, Math.min(60, Math.round(num(cs.noites)) || 1));
+      if (typeof cs.bv !== 'string' || !cityById[cs.bv] || cs.bv === c.id) cs.bv = '';
+      if (typeof cs.bvDia !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(cs.bvDia)) cs.bvDia = '';
+    });
+    normalizarBV(s);
     if (s.tag && D.tags.indexOf(s.tag) < 0) s.tag = null;
     if (!App.CRITERIOS[s.otim.criterio]) s.otim.criterio = 'tempo';
     s.otim.auto = !!s.otim.auto; s.otim.fixarPontas = !!s.otim.fixarPontas;
@@ -190,9 +197,29 @@
   };
 
   /* -------------------------------------------------------------------- rota */
+  /* Bate-volta de cidade: a cidade fica "presa" a uma cidade-base do roteiro (cs.bv) e é
+     visitada em um dia, indo e voltando, sem pernoite. Ela não entra na sequência da rota
+     (nem na rota inteligente) e não muda as datas: ocupa um dia da estadia na base. */
+  // Base válida = cidade do roteiro que não é, ela mesma, um bate-volta.
+  const baseValida = (S, id) => !!(id && S.cities[id] && S.cities[id].sel && !S.cities[id].bv);
+  App.bvBase = function (id, S) {
+    S = S || App.state;
+    const cs = S.cities[id];
+    return cs && cs.sel && cs.bv && baseValida(S, cs.bv) ? cs.bv : '';
+  };
+  // Bate-volta cuja base saiu do roteiro: sai junto (continua lembrando a base, para voltar como bate-volta).
+  function normalizarBV(S) {
+    D.cities.forEach(c => {
+      const cs = S.cities[c.id];
+      if (cs.sel && cs.bv && !baseValida(S, cs.bv)) cs.sel = false;
+    });
+  }
+  // A cidade está na viagem (parada com pernoite ou bate-volta)?
+  App.cidadeNaViagem = id => !!(App.state.cities[id] && App.state.cities[id].sel);
+
   App.route = function () {
     const S = App.state;
-    return D.cities.filter(c => S.cities[c.id].sel)
+    return D.cities.filter(c => S.cities[c.id].sel && !S.cities[c.id].bv)
       .sort((a, b) => S.cities[a.id].ordem - S.cities[b.id].ordem)
       .map(c => c.id);
   };
@@ -339,8 +366,8 @@
   }
 
   // Monta um trecho da rota (definição + estado do usuário).
-  function resolveLeg(from, to) {
-    const { key, def, intl, est } = legDef(from, to);
+  function resolveLeg(from, to, chave) {
+    const ld = legDef(from, to), def = ld.def, intl = ld.intl, est = ld.est, key = chave || ld.key;
 
     // estado do trecho (criado na primeira vez que o par aparece na rota)
     const S = App.state;
@@ -391,6 +418,14 @@
       pernoite = App.toBRL(st.hospedagem.v, st.hospedagem.cur);
     }
     return { transporte, pernoite, noites, horas: o.horas, real: temReal };
+  }
+
+  // Custo de um bate-volta (ida e volta). O valor real, se informado, é o total das duas passagens.
+  function bvCost(leg, modo) {
+    const o = leg.opts[modo], st = leg.st;
+    const temReal = modo === leg.modo && st.real.v !== '' && st.real.v != null;
+    const transporte = temReal ? App.toBRL(st.real.v, st.real.cur) : 2 * App.toBRL(o.eurMid, 'EUR');
+    return { transporte, pernoite: 0, noites: 0, horas: 2 * o.horas, real: temReal };
   }
 
   /* ============================================================================
@@ -553,6 +588,7 @@
   function compute(opts) {
     const leve = !!(opts && opts.leve);
     const S = App.state;
+    normalizarBV(S);
     const route = App.route();
 
     // trechos: Viracopos → cidades → Viracopos
@@ -579,13 +615,43 @@
     });
     segs.push({ type: 'volta', start: d, nights: 0 });
 
+    // bate-voltas: um dia da estadia na base para cada um (de preferência um dia inteiro)
+    const bvs = [], bvByCity = {}, bvByBase = {};
+    route.forEach(base => {
+      const filhos = D.cities.filter(c => App.bvBase(c.id, S) === base).map(c => c.id)
+        .sort((a, b) => (S.cities[b].bvDia ? 1 : 0) - (S.cities[a].bvDia ? 1 : 0));     // quem escolheu o dia vem primeiro
+      if (!filhos.length) return;
+      const seg = segByCity[base], dias = [];
+      for (let i = 0; i <= seg.nights; i++) dias.push(App.addDays(seg.start, i));
+      const inteiros = dias.slice(1, -1), usados = {};
+      bvByBase[base] = [];
+      filhos.forEach(id => {
+        const cs = S.cities[id];
+        let dia = cs.bvDia && dias.find(x => App.iso(x) === cs.bvDia && !usados[App.iso(x)]);
+        let escolhido = !!dia;
+        if (!dia) dia = inteiros.find(x => !usados[App.iso(x)]) || dias.find(x => !usados[App.iso(x)]) || dias[dias.length - 1];
+        usados[App.iso(dia)] = true;
+        const leg = resolveLeg(base, id, 'bv:' + base + '>' + id);
+        leg.bv = true; leg.data = dia;
+        const idx = dias.findIndex(x => x.getTime() === dia.getTime());
+        const tipo = idx > 0 && idx < dias.length - 1 ? 'inteiro' : idx === 0 ? 'chegada' : 'partida';
+        const o = leg.opts[leg.modo];
+        const b = { cityId: id, base, start: dia, end: dia, nights: 0, date: dia, leg, tipo, escolhido,
+          horasIda: o.horas, aviso: '' };
+        if (tipo !== 'inteiro') b.aviso = 'Não há um dia inteiro livre em ' + cityById[base].nome + ' para este bate-volta: ele cai no dia da ' + (tipo === 'chegada' ? 'chegada' : 'partida') + '. Aumente uma noite em ' + cityById[base].nome + '.';
+        else if (o.horas > 4.5) b.aviso = 'São ' + window.Fmt.horas(o.horas) + ' de viagem em cada sentido: o dia fica muito curto. Talvez valha pernoitar.';
+        bvs.push(b); bvByCity[id] = b; bvByBase[base].push(b);
+      });
+    });
+
     // custos
     const cats = { hospedagem: 0, alimentacao: 0, transporteLocal: 0, compras: 0, outros: 0, atracoes: 0, trechos: 0, gerais: 0 };
     const cities = {};
-    route.forEach(id => {
+    route.concat(bvs.map(b => b.cityId)).forEach(id => {
       let sub = 0;
       const cs = S.cities[id];
       D.categorias.forEach(k => {
+        if (k.id === 'hospedagem' && bvByCity[id]) return;     // bate-volta não tem hospedagem
         const x = App.toBRL(cs.custos[k.id].v, cs.custos[k.id].cur);
         cats[k.id] += x; sub += x;
       });
@@ -616,6 +682,18 @@
       });
     });
 
+    // bate-voltas: ida e volta no mesmo dia (o valor real informado já é o da ida e volta)
+    bvs.forEach(b => {
+      const leg = b.leg;
+      ['terrestre', 'aviao', 'meu'].forEach(c => {
+        const modo = c === 'meu' ? leg.modo : c === 'terrestre' ? (leg.terra || 'aviao') : (leg.opts.aviao ? 'aviao' : leg.terra);
+        const r = bvCost(leg, modo);
+        cen[c].brl += r.transporte;
+        cen[c].h += r.horas;
+        if (c === 'meu') { leg.custo = r; cats.trechos += r.transporte; cities[b.cityId] += r.transporte; }
+      });
+    });
+
     D.gerais.forEach(g => { cats.gerais += App.toBRL(S.gerais[g.id].v, S.gerais[g.id].cur); });
 
     const total = Object.keys(cats).reduce((a, k) => a + cats[k], 0);
@@ -625,7 +703,7 @@
     const otim = { crit, ideal, atual: routeCost(route, crit), melhor: routeCost(ideal, crit) };
     otim.diff = Math.max(0, otim.atual - otim.melhor);
 
-    return { route, legs, segs, segByCity, cats, cities, cen, total, base: total - cen.meu.brl, otim };
+    return { route, legs, segs, segByCity, bvs, bvByCity, bvByBase, cats, cities, cen, total, base: total - cen.meu.brl, otim };
   }
 
   // Total da viagem com outra tabela de câmbio (sem mexer no estado).
@@ -651,6 +729,8 @@
 
   // Dias (datas) em que a cidade está no roteiro: da chegada até a partida.
   App.cityDays = function (cityId) {
+    const b = App.calc.bvByCity && App.calc.bvByCity[cityId];
+    if (b) return [b.date];
     const seg = App.calc.segByCity[cityId];
     if (!seg) return [];
     const out = [];
@@ -707,11 +787,19 @@
   App.flightsFor = function (cityId) {
     const c = App.calc, r = c.route, i = r.indexOf(cityId), saida = App.parseDate(App.state.dataSaida);
     const legOf = (a, b) => c.legs.find(l => l.from === a && l.to === b);
+    const bv = c.bvByCity && c.bvByCity[cityId];
+    if (bv) return [{ from: bv.base, to: cityId, date: bv.date, leg: bv.leg }, { from: cityId, to: bv.base, date: bv.date, leg: bv.leg }];
     if (i < 0) return [{ from: 'vcp', to: cityId, date: saida, fora: true }];
     const from = i === 0 ? 'vcp' : r[i - 1];
     const rows = [{ from, to: cityId, date: i === 0 ? saida : c.segByCity[cityId].start, leg: legOf(from, cityId) }];
     if (i === r.length - 1) rows.push({ from: cityId, to: 'vcp', date: c.segs[c.segs.length - 1].start, leg: legOf(cityId, 'vcp') });
     return rows;
+  };
+
+  // Trecho pela chave: os da sequência da rota e os de bate-volta ("bv:base>cidade").
+  App.legPorChave = function (key) {
+    const c = App.calc;
+    return c.legs.find(l => l.key === key) || (c.bvs || []).map(b => b.leg).find(l => l.key === key) || null;
   };
 
   /* --------------------------------------------------------------- atualização */
@@ -786,15 +874,78 @@
     const S = App.state, cs = S.cities[id];
     const sel = on === undefined ? !cs.sel : !!on;
     if (sel === cs.sel) return;
-    let onde = '';
-    if (sel) { onde = addToRoute(id); MapView.ignite('city', id); }
-    else {
+    let msg;
+    if (sel && cs.bv && baseValida(S, cs.bv)) {          // já era bate-volta de uma base do roteiro: volta como bate-volta
+      cs.sel = true;
+      MapView.ignite('city', id);
+      msg = cityById[id].nome + ' entrou como bate-volta a partir de ' + cityById[cs.bv].nome + '.';
+    } else if (sel) {
+      cs.bv = '';
+      msg = cityById[id].nome + ' entrou no roteiro, ' + addToRoute(id) + '.';
+      MapView.ignite('city', id);
+    } else {
+      const eraBV = !!cs.bv;
       cs.sel = false;
-      const r = App.route();
-      renumber(S.otim.auto ? App.optimize(r, r) : r);
+      // os bate-voltas que saíam desta cidade saem junto
+      const filhos = D.cities.filter(c => S.cities[c.id].sel && S.cities[c.id].bv === id);
+      filhos.forEach(c => { S.cities[c.id].sel = false; });
+      if (!eraBV) { const r = App.route(); renumber(S.otim.auto ? App.optimize(r, r) : r); }
+      msg = cityById[id].nome + ' saiu do roteiro' + (filhos.length ? ', com o bate-volta a ' + filhos.map(c => c.nome).join(' e ') : '') + '.';
     }
     App.refresh();
-    UI.toast(cityById[id].nome + (sel ? ' entrou no roteiro, ' + onde + '.' : ' saiu do roteiro.'));
+    UI.toast(msg);
+  };
+
+  // Transforma a cidade em bate-volta a partir de "base" (ou, com base '', em parada com pernoite).
+  App.setBV = function (id, base) {
+    const S = App.state, cs = S.cities[id];
+    if (base) {
+      if (base === id || !baseValida(S, base)) return;
+      const eraParada = cs.sel && !cs.bv;
+      // se a cidade era base de outros bate-voltas, eles passam para a nova base
+      D.cities.forEach(c => { if (S.cities[c.id].bv === id) S.cities[c.id].bv = base; });
+      if (cs.bv !== base) cs.bvDia = '';
+      cs.bv = base; cs.sel = true;
+      if (eraParada) { const r = App.route(); renumber(S.otim.auto ? App.optimize(r, r) : r); }
+      MapView.ignite('city', id);
+      App.refresh();
+      const b = App.calc.bvByCity[id];
+      UI.toast(cityById[id].nome + ': bate-volta a partir de ' + cityById[base].nome + (b ? ', ' + window.Fmt.dow(b.date) + ' ' + window.Fmt.data(b.date) : '') + '. Não precisa de hospedagem.', 5000);
+    } else {
+      cs.bv = ''; cs.bvDia = '';
+      const onde = addToRoute(id);
+      App.refresh();
+      UI.toast(cityById[id].nome + ' virou uma parada com pernoite, ' + onde + '.');
+    }
+  };
+
+  // Melhor tempo porta a porta (um sentido) entre duas cidades, pela tabela de trechos ou estimativa.
+  App.horasEntre = function (a, b) {
+    const { def } = legDef(a, b);
+    let horas = Infinity, modo = null;
+    MODOS.forEach(m => {
+      const o = def[m];
+      if (!o) return;
+      const x = (o.h[0] + o.h[o.h.length - 1]) / 2 + (m === 'aviao' && !o.total ? D.estimativa.aviaoExtraH : 0);
+      if (x < horas) { horas = x; modo = m; }
+    });
+    return { horas, modo };
+  };
+  App.BV_MAX_H = 4;      // acima disso (em cada sentido) o bate-volta não é sugerido
+
+  // Cidades do roteiro de onde dá para fazer um bate-volta até "id", da mais perto para a mais longe.
+  App.basesBV = function (id) {
+    const S = App.state;
+    return App.route().filter(b => b !== id && baseValida(S, b))
+      .map(b => Object.assign({ base: b }, App.horasEntre(b, id)))
+      .filter(x => isFinite(x.horas)).sort((a, b) => a.horas - b.horas);
+  };
+
+  // Cidades fora da viagem que dão um bom bate-volta a partir de "base" (até BV_MAX_H em cada sentido).
+  App.destinosBV = function (base, max) {
+    const S = App.state, lim = max || App.BV_MAX_H, perto = D.cities.filter(c => c.id !== base && !S.cities[c.id].sel && distKm(cityById[base], c) < lim * 250);
+    return perto.map(c => Object.assign({ id: c.id }, App.horasEntre(base, c.id)))
+      .filter(x => x.horas <= lim).sort((a, b) => a.horas - b.horas);
   };
 
   // Manual → desliga a otimização automática (senão ela desfaria a ordem escolhida).
@@ -1037,6 +1188,6 @@
   }
 
   // Ganchos para a página de testes (tests/index.html), que carrega os scripts sem iniciar o app.
-  App._t = { defaults, merge, diff, sanitize, compute, heldKarp, heuristica, trainPath, caminho, estimar, pairCost, routeCost, legDef };
+  App._t = { defaults, merge, diff, sanitize, compute, bvCost, heldKarp, heuristica, trainPath, caminho, estimar, pairCost, routeCost, legDef };
   if (!window.VIAGEM_TESTE) init();
 })();

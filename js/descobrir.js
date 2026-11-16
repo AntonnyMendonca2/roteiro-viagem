@@ -206,7 +206,7 @@
     };
     // paisagem do caminho do trem → ponto de interesse (na cidade do trecho mais próxima)
     UI.actions['cena-add'] = t => {
-      const leg = App.calc.legs.find(l => l.key === t.dataset.leg), c = leg && window.Trilhos.cenas(leg);
+      const leg = App.legPorChave(t.dataset.leg), c = leg && window.Trilhos.cenas(leg);
       const x = c && c.lista.find(i => i.titulo === t.dataset.t);
       if (!x) return;
       const a = App.city(leg.from), b = App.city(leg.to), cid = App.distKm(a, x) <= App.distKm(b, x) ? a.id : b.id;

@@ -326,7 +326,7 @@
     D.cities.forEach(c => { S.cities[c.id].sel = false; });
     alt.ordem.forEach((i, k) => {
       const id = prob.ids[i];
-      S.cities[id].sel = true; S.cities[id].ordem = k + 1; S.cities[id].noites = alt.noites[k];
+      S.cities[id].sel = true; S.cities[id].bv = ''; S.cities[id].ordem = k + 1; S.cities[id].noites = alt.noites[k];
       if (k > 0) {
         const key = T.legDef(prob.ids[alt.ordem[k - 1]], id).key;
         S.legs[key] = Object.assign({}, S.legs[key], { modo: MODO_IDX[alt.modos[k - 1]] });

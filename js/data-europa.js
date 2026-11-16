@@ -48,7 +48,7 @@
 
   /* Reino Unido (além de Londres) */
   C('liverpool', 'Liverpool', 'Reino Unido', 826, 53.4084, -2.9916, 'GBP', 'Liverpool', 'LPL', 'england/liverpool', ['Liverpool Lime Street', 53.4076, -2.9775], 32, 32, { rotulo: 'w',
-    nota: 'A cidade dos Beatles e do Liverpool FC. Fica a ~2h15 de trem de Londres: dá para conhecer em um bate-volta (veja o ponto "Liverpool dos Beatles" em Londres) ou dormir aqui.' });
+    nota: 'A cidade dos Beatles e do Liverpool FC. Fica a ~2h15 de trem de Londres: dá para incluir como bate-volta (ida e volta no mesmo dia) ou dormir aqui.' });
 
   /* Irlanda, Benelux */
   C('dublin', 'Dublin', 'Irlanda', 372, 53.3498, -6.2603, 'EUR', 'Dublin', 'DUB', 'ireland/dublin', ['Dublin Connolly', 53.3531, -6.2460], 55, 45, { grande: true, rotulo: 'w',

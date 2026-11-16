@@ -1010,3 +1010,59 @@ input[type=text]:focus, input[type=url]:focus { outline: none; border-color: var
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* ============================================================ BATE-VOLTAS DE CIDADE
+   Cidade visitada em um dia a partir de uma cidade do roteiro (ida e volta, sem pernoite):
+   no roteiro, cartão recuado sob a base; no mapa, trecho tracejado e anel na cidade;
+   na linha do tempo, o dia leva o nome da cidade visitada. */
+.bvcard {
+  margin: 4px 0 0 26px; padding: 6px 8px 6px 10px; position: relative;
+  background: var(--panel); border: 1px dashed #4a4a4a; border-radius: 10px;
+}
+.bvcard::before {            /* "gancho" ligando à cidade-base */
+  content: ''; position: absolute; left: -14px; top: -6px; width: 12px; height: 22px;
+  border-left: 1.5px dashed #5c5c5c; border-bottom: 1.5px dashed #5c5c5c; border-bottom-left-radius: 7px;
+}
+.bvcard.open { border-color: #5c5c5c; }
+.bv-row { display: flex; align-items: center; gap: 8px; }
+.bv-ic { color: var(--accent); font-size: 15px; font-weight: 700; line-height: 1; flex: none; }
+.bv-main { flex: 1; min-width: 0; border: 0; background: none; text-align: left; padding: 2px 0; display: flex; flex-direction: column; line-height: 1.25; }
+.bv-main b { font-size: 13.5px; font-weight: 600; }
+.bv-main small { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bv-k { font-size: 9.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); font-weight: 600; }
+.bvcard .arrows button { width: 26px; height: 26px; font-size: 12px; }
+.bv-body { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.bv-body h5 { margin: 10px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: #bdbdbd; }
+.bv-legs { margin: 4px 0 0; }
+.bv-legs .leg, .bv-box .leg { margin-left: 4px; }
+.leg.bvleg { border-left-style: dashed; }
+.bv-pts { list-style: none; margin: 0; padding: 0; }
+.bv-pts li { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.bv-pts small { font-size: 11px; white-space: nowrap; }
+.bv-box { margin: 10px 0 4px; padding: 10px 11px; border: 1px dashed #4a4a4a; border-radius: 10px; background: var(--panel-2); }
+.bv-box.on { border-color: var(--accent); }
+.bv-box-h { display: flex; gap: 9px; align-items: flex-start; }
+.bv-box-h div { display: flex; flex-direction: column; line-height: 1.35; }
+.bv-box-h b { font-size: 13px; }
+.bv-box-h small { font-size: 11.5px; }
+.bv-box .links { margin-top: 8px; align-items: center; }
+.bv-sel { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 12.5px; max-width: 100%; }
+.bv-tag { color: var(--accent); font-weight: 600; }
+.chip.add small { color: var(--muted); margin-left: 3px; }
+
+/* mapa */
+.route.active.bv { stroke-dasharray: calc(7px / var(--k)) calc(5px / var(--k)); }
+.city.bv .dot { fill: var(--bg); stroke: var(--accent); stroke-width: 2px; filter: none; }
+.city.bv .pulse { animation: none; }
+
+/* linha do tempo */
+.tl-day.bv { background: rgba(245, 184, 65, .12); box-shadow: inset 0 0 0 1px rgba(245, 184, 65, .55); }
+.tl-day.bv.warn { box-shadow: inset 0 0 0 1px var(--accent); }
+.tl-bv {
+  font-style: normal; font-size: 9px; font-weight: 600; color: var(--accent); margin-top: 2px;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* dia a dia: dia da base ocupado pelo bate-volta */
+.dd-day.bvday { border-style: dashed; }
+.dd-day.bvday .dd-head small { color: var(--accent); }

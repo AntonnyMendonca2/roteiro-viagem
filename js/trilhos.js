@@ -276,10 +276,13 @@
     return cenasPedindo[ck];
   };
 
+  // Trechos de trem do roteiro: os da rota e os de bate-volta.
+  const todosTrechos = () => A().calc.legs.concat((A().calc.bvs || []).map(b => b.leg));
+
   // Paisagens de todos os trechos de trem ativos do roteiro (para o mapa).
   Trilhos.cenasDaRota = function () {
     const out = [];
-    A().calc.legs.forEach(leg => {
+    todosTrechos().forEach(leg => {
       if (leg.modo !== 'trem') return;
       const c = Trilhos.cenas(leg);
       if (c) c.lista.forEach(x => out.push(Object.assign({ id: 'cena:' + leg.key + ':' + x.titulo, legKey: leg.key }, x)));
@@ -289,7 +292,7 @@
 
   // Chamado a cada atualização: pede traçado e paisagens dos trechos de trem ativos (só o que falta).
   Trilhos.carregar = function () {
-    A().calc.legs.forEach(leg => {
+    todosTrechos().forEach(leg => {
       if (leg.modo !== 'trem' || !paradas(leg, 'trem')) return;
       Trilhos.pedir(leg, 'trem').then(g => { if (g) Trilhos.buscarCenas(leg); });
     });
@@ -315,7 +318,7 @@
     const o = EUROSTAR[leg.from], d = EUROSTAR[leg.to];
     if (!/eurostar\.com/i.test(url) || !o || !d) return url;
     const App = A(), seg = App.calc && App.calc.segByCity[leg.to];
-    const data = seg ? seg.start : App.parseDate(App.state.dataSaida);
+    const data = leg.data || (seg ? seg.start : App.parseDate(App.state.dataSaida));
     return 'https://www.eurostar.com/search/uk-en?adult=' + (D.config.viajantes || 1) + '&origin=' + o + '&destination=' + d +
       (data ? '&outbound=' + App.iso(data) : '');
   };
@@ -345,11 +348,11 @@
   };
 
   Trilhos.buscarHorarios = function (legKey) {
-    const App = A(), leg = App.calc.legs.find(l => l.key === legKey);
+    const App = A(), leg = App.legPorChave(legKey);
     if (!leg || leg.intl) return;
     const a = App.city(leg.from), b = App.city(leg.to), pa = a.estacao || a, pb = b.estacao || b;
     const seg = App.calc.segByCity[leg.to];
-    const q = Trilhos.dataConsulta(seg ? seg.start : App.parseDate(App.state.dataSaida), App.parseDate(App.iso(new Date())));
+    const q = Trilhos.dataConsulta(leg.data || (seg ? seg.start : App.parseDate(App.state.dataSaida)), App.parseDate(App.iso(new Date())));
     const iso = App.iso(q.data);
     const url = TRANSITOUS + '?fromPlace=' + pa.lat + ',' + pa.lon + '&toPlace=' + pb.lat + ',' + pb.lon + '&time=' + iso + 'T05:00:00Z';
     horarios[legKey] = { status: 'carregando' };

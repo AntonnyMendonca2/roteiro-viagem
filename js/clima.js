@@ -218,7 +218,7 @@
   // Busca o clima das cidades do roteiro (e da cidade aberta) que ainda não estão no cache.
   Clima.carregar = function () {
     const App = A(), hoje = Date.now();
-    const ids = App.calc.route.slice();
+    const ids = App.calc.route.concat(App.calc.bvs.map(b => b.cityId));
     if (App.focus && App.focus.type === 'city' && ids.indexOf(App.focus.id) < 0) ids.push(App.focus.id);
     ids.forEach(id => {
       const temH = !!Net.peek('clima:h:' + id, TTL_HIST);

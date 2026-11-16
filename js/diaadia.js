@@ -216,7 +216,13 @@
 
   // Dias disponíveis da cidade: chegada (só a tarde), inteiros e partida (só a manhã).
   DD.diasDe = function (cityId) {
-    const App = A(), ds = App.cityDays(cityId);
+    const App = A(), bv = App.calc.bvByCity && App.calc.bvByCity[cityId];
+    if (bv) {
+      // bate-volta: sai da base às 8h e volta para chegar até ~22h; o tempo na cidade é o que sobra
+      const ini = Math.min(16, 8 + bv.horasIda), fim = Math.max(ini + 2, 22 - bv.horasIda);
+      return [{ iso: App.iso(bv.date), date: bv.date, dow: bv.date.getUTCDay(), tipo: 'bv', ini, fim }];
+    }
+    const ds = App.cityDays(cityId);
     return ds.map((d, i) => {
       const tipo = i === 0 ? 'chegada' : i === ds.length - 1 ? 'partida' : 'inteiro';
       return { iso: App.iso(d), date: d, dow: d.getUTCDay(), tipo,
@@ -240,7 +246,11 @@
   DD.plano = function (cityId) {
     const App = A(), S = App.state;
     if (!S.cities[cityId].sel) return null;
-    const dias = DD.diasDe(cityId), longos = {};
+    // dias de bate-volta a outra cidade saem da agenda da base (voltam no fim como dias "ocupados")
+    const bvs = (App.calc.bvByBase && App.calc.bvByBase[cityId]) || [];
+    const bvIso = {};
+    bvs.forEach(b => { bvIso[App.iso(b.date)] = b; });
+    const dias = DD.diasDe(cityId).filter(d => !bvIso[d.iso]), longos = {};
     const pontos = App.poisOf(cityId).filter(p => App.poiActive(p.id)).map(p => {
       const dur = +p.duracaoH || 1, longo = !!p.bateVolta && dur > CFG.bateVoltaLongoH;
       if (longo) longos[p.id] = true;
@@ -248,10 +258,15 @@
         abre: p.horario ? hh(p.horario.abre) : null, fecha: p.horario ? hh(p.horario.fecha) : null };
     });
     const o = window.Ape.origem(cityId);
-    const sig = JSON.stringify([dias.map(d => d.iso + d.ini + d.fim), pontos, o.lat, o.lon, !!window.Ape.matrizDe(cityId)]);
+    const sig = JSON.stringify([dias.map(d => d.iso + d.ini + d.fim), pontos, o.lat, o.lon, !!window.Ape.matrizDe(cityId), Object.keys(bvIso).map(k => k + bvIso[k].cityId)]);
     if (memo[cityId] && memo[cityId].sig === sig) return memo[cityId].plano;
     const plano = DD.planejar({ dias, pontos, desloc: deslocDe(cityId, longos) });
     plano.dias.forEach((d, i) => { d.date = dias[i].date; avisosDoDia(cityId, d); });
+    // dias de bate-volta (sem pontos da base): entram na ordem das datas
+    bvs.forEach(b => {
+      plano.dias.push({ iso: App.iso(b.date), date: b.date, dow: b.date.getUTCDay(), tipo: 'bvbase', bvCity: b.cityId, itens: [], avisos: [], atividadeH: 0 });
+    });
+    plano.dias.sort((a, b) => (a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0));
     plano.cityId = cityId; plano.n = pontos.length;
     memo[cityId] = { sig, plano };
     return plano;
@@ -289,7 +304,25 @@
     return d ? d.iso : null;
   };
 
-  const TIPO = { chegada: 'chegada · só a tarde', partida: 'partida · só a manhã', inteiro: '' };
+  const TIPO = { chegada: 'chegada · só a tarde', partida: 'partida · só a manhã', inteiro: '', bv: 'bate-volta' };
+
+  // Dia da base ocupado por um bate-volta: mostra a agenda da cidade visitada.
+  function diaBVHtml(c, d, ativo) {
+    const App = A(), F = window.Fmt, b = App.calc.bvByCity[d.bvCity], cidade = App.city(d.bvCity), pl = DD.plano(d.bvCity);
+    const dia = pl && pl.dias[0], o = b.leg.opts[b.leg.modo];
+    let h = '<section class="dd-day bvday' + (d.iso === ativo ? ' on' : '') + '" data-city="' + c.id + '">' +
+      '<button type="button" class="dd-head" data-act="open-city" data-id="' + d.bvCity + '">' +
+      '<b>' + F.dow(d.date) + ', ' + F.data(d.date) + '</b><small><span class="bv-ic" aria-hidden="true">↺</span> Bate-volta a ' + esc(cidade.nome) +
+      ' · ' + F.horas(o.horas) + ' cada trecho</small></button><ol>' +
+      '<li class="dd-go">' + hhmm(8) + ' · saída de ' + esc(c.nome) + ' (' + esc(MODO_TXT[b.leg.modo] || b.leg.modo) + ')</li>';
+    if (dia && dia.itens.length) {
+      h += dia.itens.map((i, n) => '<li class="dd-it"><span class="dd-n">' + (n + 1) + '</span><button type="button" class="dd-t" data-act="open-poi" data-id="' + esc(i.id) + '"><b>' +
+        esc(App.poi(i.id).nome) + '</b><small>' + hhmm(i.chega) + ' – ' + hhmm(i.sai) + '</small></button></li>').join('');
+    } else h += '<li class="dd-go">Escolha os pontos no painel de ' + esc(cidade.nome) + '.</li>';
+    h += '<li class="dd-go">volta a ' + esc(c.nome) + ' · chegada ~' + hhmm(Math.min(23.9, (dia && dia.itens.length ? dia.fim : 22 - o.horas) + o.horas)) + '</li></ol>';
+    return h + '</section>';
+  }
+  const MODO_TXT = { trem: 'trem', onibus: 'ônibus', balsa: 'balsa', aviao: 'avião' };
   const deslocTxt = d => (d.modo === 'incluso' || d.min < 0.5 ? '' : (d.modo === 'transporte' ? '~' + window.Ape.fmtMin(d.min) + ' de transporte' : (d.real ? '' : '~') + window.Ape.fmtMin(d.min) + ' a pé'));
 
   // Seção "Dia a dia" do painel da cidade.
@@ -298,8 +331,9 @@
     if (!pl) return '';
     let html = '<h4>Dia a dia <small>' + pl.n + (pl.n === 1 ? ' ponto' : ' pontos') + ' em ' + pl.dias.length + ' dias</small></h4>';
     if (!pl.n) return html + '<p class="muted">Selecione pontos de interesse abaixo para montar a agenda desta cidade.</p>';
-    const ativo = DD.diaAtivo(c.id), opts = pl.dias.map(d => [d.iso, F.dow(d.date) + ' ' + F.data(d.date)]);
+    const ativo = DD.diaAtivo(c.id), opts = pl.dias.filter(d => !d.bvCity).map(d => [d.iso, F.dow(d.date) + ' ' + F.data(d.date)]);
     html += '<div class="dd">' + pl.dias.map(d => {
+      if (d.bvCity) return diaBVHtml(c, d, ativo);
       const tot = d.itens.length ? F.horas(d.atividadeH) + ' · ' + hhmm(d.ini) + '–' + hhmm(d.fim) : 'livre';
       let h = '<section class="dd-day' + (d.iso === ativo ? ' on' : '') + (d.puxado ? ' heavy' : '') + '" data-dd-day="' + d.iso + '" data-city="' + c.id + '">' +
         '<button type="button" class="dd-head" data-act="dd-day" data-id="' + c.id + '" data-dia="' + d.iso + '" data-fid="dd-' + d.iso + '">' +
@@ -332,6 +366,13 @@
     if (!pl) return '';
     const linhas = [c.nome.toUpperCase() + ' — dia a dia', ''];
     pl.dias.forEach(d => {
+      if (d.bvCity) {
+        const sub = DD.plano(d.bvCity), dia = sub && sub.dias[0];
+        linhas.push(F.dow(d.date) + ', ' + F.data(d.date) + ' — bate-volta a ' + App.city(d.bvCity).nome);
+        (dia ? dia.itens : []).forEach((i, n) => linhas.push('  ' + (n + 1) + '. ' + hhmm(i.chega) + '–' + hhmm(i.sai) + '  ' + App.poi(i.id).nome));
+        linhas.push('');
+        return;
+      }
       linhas.push(F.dow(d.date) + ', ' + F.data(d.date) + (TIPO[d.tipo] ? ' (' + TIPO[d.tipo] + ')' : '') + (d.itens.length ? ' — ' + F.horas(d.atividadeH) : ' — livre'));
       d.itens.forEach((i, n) => {
         const tx = deslocTxt(i.desloc);

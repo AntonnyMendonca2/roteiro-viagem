@@ -766,6 +766,100 @@
   });
 
   /* ------------------------------------------------------------ utilitários */
+  grupo('Bate-volta de cidade');
+
+  // Liverpool como bate-volta a partir de Londres (3 noites no padrão).
+  function comBateVolta(dia) {
+    const S = novoEstado();
+    S.cities.liverpool.sel = true; S.cities.liverpool.bv = 'londres'; S.cities.liverpool.bvDia = dia || '';
+    App.calc = T.compute();
+    return S;
+  }
+
+  teste('Não entra na rota nem muda as datas da viagem', () => {
+    novoEstado();
+    const antes = T.compute();
+    comBateVolta();
+    const c = App.calc;
+    ok(c.route.indexOf('liverpool') < 0, 'Liverpool não deveria estar na sequência da rota');
+    igual(c.route, antes.route, 'rota');
+    igual(c.segs.map(s => App.iso(s.start)), antes.segs.map(s => App.iso(s.start)), 'datas');
+    igual(c.bvs.length, 1, 'um bate-volta');
+    igual(c.bvByCity.liverpool.base, 'londres', 'base');
+  });
+
+  teste('Cai num dia inteiro da estadia na base (nem chegada nem partida)', () => {
+    comBateVolta();
+    const b = App.calc.bvByCity.liverpool, seg = App.calc.segByCity.londres;
+    ok(b.date > seg.start && b.date < seg.end, 'data fora dos dias inteiros de Londres');
+    igual(b.tipo, 'inteiro', 'tipo do dia');
+    igual(App.cityDays('liverpool').map(App.iso), [App.iso(b.date)], 'cityDays');
+  });
+
+  teste('Respeita o dia escolhido e ignora um dia fora da estadia', () => {
+    novoEstado();
+    const seg = T.compute().segByCity.londres, ultimo = App.iso(App.addDays(seg.start, seg.nights - 1));
+    comBateVolta(ultimo);
+    igual(App.iso(App.calc.bvByCity.liverpool.date), ultimo, 'dia escolhido');
+    comBateVolta('2001-01-01');
+    ok(App.calc.bvByCity.liverpool.date > seg.start, 'dia inválido deveria virar automático');
+  });
+
+  teste('Custo: ida e volta estimada (2×) ou o valor real informado', () => {
+    novoEstado();
+    const c0 = T.compute(), sem = c0.cats.trechos;
+    const S = comBateVolta(), leg = App.calc.bvByCity.liverpool.leg, o = leg.opts[leg.modo];
+    perto(App.calc.cats.trechos - sem, 2 * App.toBRL(o.eurMid, 'EUR'), 0.01, 'estimativa');
+    perto(App.calc.cen.meu.h - c0.cen.meu.h, 2 * o.horas, 0.01, 'horas de ida e volta');
+    S.legs[leg.key].real = { v: 300, cur: 'BRL' };
+    App.calc = T.compute();
+    perto(App.calc.cats.trechos - sem, 300, 0.01, 'valor real (ida e volta)');
+    ok(App.calc.cities.liverpool >= 300, 'subtotal da cidade inclui o trecho');
+  });
+
+  teste('Pontos da cidade do bate-volta entram no total; hospedagem não', () => {
+    const S = comBateVolta(), antes = App.calc.total;
+    S.pois['liv-beatles-story'].sel = true;
+    S.cities.liverpool.custos.hospedagem = { v: 500, cur: 'BRL' };
+    App.calc = T.compute();
+    perto(App.calc.total - antes, App.toBRL(S.pois['liv-beatles-story'].valor.v, 'GBP'), 0.01);
+    ok(App.poiActive('liv-beatles-story'), 'ponto ativo');
+  });
+
+  teste('Base fora do roteiro: o bate-volta sai junto', () => {
+    const S = comBateVolta();
+    S.cities.londres.sel = false;
+    App.calc = T.compute();
+    ok(!S.cities.liverpool.sel, 'Liverpool deveria sair');
+    igual(App.calc.bvs.length, 0);
+    igual(S.cities.liverpool.bv, 'londres', 'continua lembrando a base');
+  });
+
+  teste('Dois bate-voltas da mesma base ficam em dias diferentes', () => {
+    const S = comBateVolta();
+    S.cities.bruxelas.sel = true; S.cities.bruxelas.bv = 'londres';
+    App.calc = T.compute();
+    const d = App.calc.bvByBase.londres.map(b => App.iso(b.date));
+    igual(d.length, 2);
+    ok(d[0] !== d[1], 'mesmo dia: ' + d.join());
+  });
+
+  teste('Sugestões: Liverpool é bate-volta possível a partir de Londres', () => {
+    novoEstado();
+    App.calc = T.compute();
+    const s = App.destinosBV('londres');
+    ok(s.some(x => x.id === 'liverpool'), 'Liverpool não sugerido');
+    ok(s.every(x => x.horas <= App.BV_MAX_H), 'sugestão longe demais');
+    ok(App.basesBV('liverpool')[0].base === 'londres', 'base mais perto de Liverpool');
+  });
+
+  teste('Dia a dia: o dia do bate-volta tem a janela de horário da viagem', () => {
+    comBateVolta();
+    const ds = window.DiaADia.diasDe('liverpool'), h = App.calc.bvByCity.liverpool.horasIda;
+    igual(ds.length, 1); igual(ds[0].tipo, 'bv');
+    perto(ds[0].ini, 8 + h, 0.01, 'início');
+  });
+
   grupo('Utilitários');
 
   teste('parseLatLon: links do Google Maps e texto', () => {

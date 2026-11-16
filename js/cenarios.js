@@ -170,7 +170,7 @@
     calc.legs.forEach(l => { if (!l.intl) modos[l.modo]++; });
     const segs = calc.segs;
     let pontos = 0;
-    calc.route.forEach(cid => { App.poisOf(cid).forEach(p => { if (st.pois[p.id] && st.pois[p.id].sel) pontos++; }); });
+    calc.route.concat((calc.bvs || []).map(b => b.cityId)).forEach(cid => { App.poisOf(cid).forEach(p => { if (st.pois[p.id] && st.pois[p.id].sel) pontos++; }); });
     const r = {
       id: c.id, nome: c.nome, letra: Cen.letra(c.id), ativo: c.id === S.cenarioAtivo, alterado: c.alterado,
       total: calc.total, rota: calc.route.slice(), cidades: calc.route.length, pontos,

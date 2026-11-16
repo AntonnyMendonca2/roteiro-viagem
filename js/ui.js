@@ -277,7 +277,8 @@
     if (real) preco = Fmt.moeda(A().num(leg.st.real.v), leg.st.real.cur) + ' (valor real)';
     else if (o.eur) preco = Fmt.faixaEur(o.eur);
     else preco = 'sem estimativa — informe o valor';
-    return { titulo: nomeDe(leg.from) + ' → ' + nomeDe(leg.to), modo: MODO[modo], desc: o.desc, tempo, preco };
+    if (leg.bv) { tempo += ' cada trecho'; if (!real && o.eur) preco = Fmt.faixaEur([2 * o.eur[0], 2 * o.eur[1]]) + ' ida e volta'; }
+    return { titulo: nomeDe(leg.from) + (leg.bv ? ' ⇄ ' : ' → ') + nomeDe(leg.to) + (leg.bv ? ' (bate-volta)' : ''), modo: MODO[modo], desc: o.desc, tempo, preco };
   };
 
   /* ================================================================ componentes */
@@ -339,6 +340,9 @@
         case 'n-dec': App.setNights(id, App.state.cities[id].noites - 1); break;
         case 'n-inc': App.setNights(id, App.state.cities[id].noites + 1); break;
         case 'mode': App.setLegMode(t.dataset.leg, t.dataset.mode); break;
+        case 'bv-set': App.setBV(id, t.dataset.base); break;
+        case 'bv-off': App.setBV(id, ''); break;
+        case 'bv-exp': UI.bvAberto[id] = !UI.bvAberto[id]; UI.renderAll(); break;
         case 'back': {
           const f = App.focus;
           if (f && f.type === 'poi') App.openCity(App.poi(f.id).cityId); else App.closeDetail();
@@ -387,6 +391,7 @@
     els.sidebar.addEventListener('change', e => {
       const t = e.target;
       if (t.dataset.otim) { A().setOtim(t.dataset.otim, t.type === 'checkbox' ? t.checked : t.value); return; }
+      if (t.dataset.bvBase) { if (t.value) A().setBV(t.dataset.bvBase, t.value); return; }
       if (!t.dataset.path) return;
       if ('link' in t.dataset) { A().set(t.dataset.path, UI.limparLink(t.value)); A().refresh(); return; }
       if (t.type === 'checkbox') A().set(t.dataset.path, t.checked);
@@ -569,7 +574,8 @@
     els.sumBar.parentNode.classList.toggle('over', pct > 100);
     els.sumPct.classList.toggle('over', pct > 100);
 
-    const porCidade = c.route.map(id => ({ nome: App.city(id).nome, v: c.cities[id] }));
+    const porCidade = c.route.map(id => ({ nome: App.city(id).nome, v: c.cities[id] }))
+      .concat(c.bvs.map(b => ({ nome: App.city(b.cityId).nome + ' (bate-volta)', v: c.cities[b.cityId] })));
     const cat = c.cats;
     const porCat = [
       { nome: 'Hospedagem', v: cat.hospedagem }, { nome: 'Alimentação', v: cat.alimentacao },
@@ -627,9 +633,14 @@
         dias.map(d => {
           const w = seg.type === 'cidade' ? avisos[seg.cityId + '|' + App.iso(d)] : '';
           const wx = window.Clima.tlHtml(id, d);        // temperatura típica e ícone do clima
-          const fb = seg.type === 'cidade' ? window.Futebol.tlHtml(id, d) : { html: '', titulo: '' };   // bola: jogo neste dia
-          return '<button type="button" class="tl-day' + (w ? ' warn' : '') + '" data-act="day" data-id="' + esc(id) + '" data-dia="' + App.iso(d) + '" title="' +
-            esc((w || (Fmt.dow(d) + ', ' + Fmt.data(d) + (wx.titulo ? ' · ' + wx.titulo : ''))) + (fb.titulo ? ' · ' + fb.titulo : '')) + '"><i>' + Fmt.dow(d) + '</i><b>' + Fmt.data(d) + '</b>' + wx.html + fb.html + (w ? '<u>!</u>' : '') + '</button>';
+          // bate-volta neste dia (a partir desta cidade): o dia mostra a cidade visitada
+          const bv = seg.type === 'cidade' ? (c.bvByBase[seg.cityId] || []).find(b => b.date.getTime() === d.getTime()) : null;
+          const did = bv ? bv.cityId : id;
+          const fb = seg.type === 'cidade' ? window.Futebol.tlHtml(did, d) : { html: '', titulo: '' };   // bola: jogo neste dia
+          const wb = bv ? avisos[bv.cityId + '|' + App.iso(d)] : '';
+          const tit = (bv ? 'Bate-volta a ' + App.city(bv.cityId).nome + ' · ' : '') + ((w || wb) || (Fmt.dow(d) + ', ' + Fmt.data(d) + (wx.titulo ? ' · ' + wx.titulo : ''))) + (fb.titulo ? ' · ' + fb.titulo : '');
+          return '<button type="button" class="tl-day' + (w || wb ? ' warn' : '') + (bv ? ' bv' : '') + '" data-act="day" data-id="' + esc(did) + '" data-dia="' + App.iso(d) + '" title="' +
+            esc(tit) + '"><i>' + Fmt.dow(d) + '</i><b>' + Fmt.data(d) + '</b>' + (bv ? '<em class="tl-bv">↺ ' + esc(App.city(bv.cityId).nome) + '</em>' : wx.html) + fb.html + (w || wb ? '<u>!</u>' : '') + '</button>';
         }).join('') + '</div></div>';
     }).join('');
     els.timeline.innerHTML = c.route.length ? '<div class="tl-track">' + html + '</div>' : '';
@@ -661,10 +672,10 @@
     const btn = m => '<button type="button" data-act="mode" data-leg="' + key + '" data-mode="' + m + '" data-fid="m-' + key + '-' + m + '" class="' +
       (leg.modo === m ? 'on' : '') + '" aria-pressed="' + (leg.modo === m) + '">' + icon(m) + MODO[m] + '</button>';
 
-    let html = '<li class="leg ' + leg.modo + '">' +
+    let html = '<li class="leg ' + leg.modo + (leg.bv ? ' bvleg' : '') + '">' +
       '<div class="leg-head"><span class="leg-title">' + esc(tx.titulo) + '</span>' + (leg.est ? '<span class="est">estimativa</span>' : '') + '</div>';
     html += '<div class="seg" role="group" aria-label="Meio de transporte">' + disp.map(btn).join('') + '</div>';
-    html += '<p class="leg-info">' + esc(tx.desc) + ' · ' + esc(tx.tempo) + (o.eur ? ' · ' + Fmt.faixaEur(o.eur) : '') +
+    html += '<p class="leg-info">' + esc(tx.desc) + ' · ' + esc(tx.tempo) + (o.eur ? ' · ' + (leg.bv ? Fmt.faixaEur([2 * o.eur[0], 2 * o.eur[1]]) + ' ida e volta' : Fmt.faixaEur(o.eur)) : '') +
       ' <b data-out="leg-cost:' + key + '"></b></p>';
     if (o.noturno) html += '<p class="leg-via">Há opção noturna (dorme a bordo e economiza uma diária).</p>';
     if (!leg.intl && (leg.aviso || disp.length === 1)) html += '<p class="warn-line">' + esc(leg.aviso || 'Somente ' + MODO[disp[0]].toLowerCase() + ' neste trecho.') + '</p>';
@@ -675,11 +686,12 @@
       if (leg.st.pernoite) html += money('Hospedagem em ' + o.via.nome, 'legs.' + leg.key + '.hospedagem');
     }
     html += window.Trilhos.legHtml(leg);          // trem: horários reais e paisagens no caminho
-    if (leg.modo === 'aviao') {                   // avião: buscadores de voo já preenchidos
+    if (leg.modo === 'aviao' && leg.bv) html += '<div class="links tight">' + linkBtns(UI.linksVoo(leg.from, leg.to, leg.data)) + '</div>';
+    else if (leg.modo === 'aviao') {              // avião: buscadores de voo já preenchidos
       const f = App.flightsFor(leg.to === 'vcp' ? leg.from : leg.to).find(r => r.from === leg.from && r.to === leg.to);
       if (f) html += '<div class="links tight">' + linkBtns(UI.linksVoo(f.from, f.to, f.date)) + '</div>';
     }
-    html += money('Valor real', 'legs.' + leg.key + '.real', leg.intl ? 'ou use "Voo internacional" no orçamento' : 'substitui a estimativa');
+    html += money(leg.bv ? 'Valor real (ida e volta)' : 'Valor real', 'legs.' + leg.key + '.real', leg.intl ? 'ou use "Voo internacional" no orçamento' : leg.bv ? 'as duas passagens somadas' : 'substitui a estimativa');
     html += linkField('f-ll-' + key, 'Link da passagem <small>a que eu encontrei</small>', 'legs.' + leg.key + '.link', leg.st.link, 'https://…');
     void App;
     return html + '</li>';
@@ -718,6 +730,88 @@
       status + '</section>';
   }
 
+  /* ============================================================ bate-voltas */
+  UI.bvAberto = {};       // cartões de bate-volta expandidos no roteiro (cidade → true)
+  const horasTxt = x => '~' + Fmt.horas(x.horas) + (x.modo ? ' de ' + MODO[x.modo].toLowerCase() : '');
+
+  // Seletor do dia do bate-volta (dias da estadia na base).
+  function bvDiaSelect(b) {
+    const App = A(), seg = App.calc.segByCity[b.base], cs = App.state.cities[b.cityId], dias = [];
+    for (let i = 0; i <= seg.nights; i++) dias.push(App.addDays(seg.start, i));
+    const tipo = i => (i === 0 ? ' (chegada)' : i === dias.length - 1 ? ' (partida)' : '');
+    return '<div class="field"><label for="f-bvd-' + b.cityId + '">Dia do bate-volta</label><select id="f-bvd-' + b.cityId + '" data-fid="f-bvd-' + b.cityId +
+      '" data-full data-path="cities.' + b.cityId + '.bvDia"><option value="">Automático (' + Fmt.dow(b.date) + ' ' + Fmt.data(b.date) + ')</option>' +
+      dias.map((d, i) => '<option value="' + App.iso(d) + '"' + (cs.bvDia === App.iso(d) && b.escolhido ? ' selected' : '') + '>' + Fmt.dow(d) + ', ' + Fmt.data(d) + tipo(i) + '</option>').join('') +
+      '</select></div>';
+  }
+
+  // Cartões dos bate-voltas que saem de uma cidade do roteiro (ficam logo abaixo dela).
+  function bvCards(base) {
+    const App = A(), c = App.calc, lista = c.bvByBase[base] || [];
+    return lista.map(b => {
+      const city = App.city(b.cityId), aberto = !!UI.bvAberto[b.cityId], o = b.leg.opts[b.leg.modo];
+      const pts = App.poisOf(b.cityId).filter(p => App.poiActive(p.id));
+      let h = '<li class="bvcard' + (aberto ? ' open' : '') + '">' +
+        '<div class="bv-row"><span class="bv-ic" aria-hidden="true">↺</span>' +
+        '<button type="button" class="bv-main" data-act="open-city" data-id="' + b.cityId + '"><span class="bv-k">Bate-volta</span><b>' + esc(city.nome) + '</b>' +
+          '<small>' + Fmt.dow(b.date) + ' ' + Fmt.data(b.date) + ' · ' + MODO[b.leg.modo].toLowerCase() + ' ' + Fmt.horas(o.horas) + ' · ' +
+          (pts.length ? pts.length + (pts.length === 1 ? ' ponto' : ' pontos') : 'sem pontos') + '</small></button>' +
+        '<span class="cc-sub" data-out="city-sub:' + b.cityId + '"></span>' +
+        '<div class="arrows"><button type="button" data-act="bv-exp" data-id="' + b.cityId + '" data-fid="bvx-' + b.cityId + '" aria-expanded="' + aberto + '" aria-label="' + (aberto ? 'Recolher' : 'Expandir') + '" title="' + (aberto ? 'Recolher' : 'Trecho, dia e pontos') + '">' + (aberto ? '▴' : '▾') + '</button>' +
+        '<button type="button" data-act="toggle-city" data-id="' + b.cityId + '" aria-label="Remover bate-volta" title="Remover bate-volta">×</button></div></div>';
+      if (b.aviso) h += '<p class="warn-line">' + esc(b.aviso) + '</p>';
+      if (aberto) {
+        h += '<div class="bv-body">' + bvDiaSelect(b) + '<ol class="itin bv-legs">' + legCard(b.leg) + '</ol>' +
+          '<h5>Pontos em ' + esc(city.nome) + '</h5>' +
+          (pts.length ? '<ul class="bv-pts">' + pts.map(p => '<li><button type="button" class="lnk" data-act="open-poi" data-id="' + esc(p.id) + '">' + esc(p.nome) + '</button><small>' + esc(p.preco.label) + '</small></li>').join('') + '</ul>'
+            : '<p class="muted">Nenhum ponto escolhido ainda.</p>') +
+          '<div class="links tight"><button type="button" class="btn" data-act="open-city" data-id="' + b.cityId + '">Escolher pontos em ' + esc(city.nome) + '</button>' +
+          '<button type="button" class="btn" data-act="bv-off" data-id="' + b.cityId + '">Dormir em ' + esc(city.nome) + ' (virar parada)</button></div></div>';
+      }
+      return h + '</li>';
+    }).join('');
+  }
+
+  // "Como visitar": parada com pernoite × bate-volta a partir de uma cidade do roteiro.
+  function bvBox(c) {
+    const App = A(), cs = App.state.cities[c.id], b = App.calc.bvByCity[c.id];
+    const bases = App.basesBV(c.id), boas = bases.filter(x => x.horas <= App.BV_MAX_H);
+    if (b) {
+      const outras = bases.filter(x => x.base !== b.base);
+      let h = '<div class="bv-box on"><div class="bv-box-h"><span class="bv-ic" aria-hidden="true">↺</span><div><b>Bate-volta a partir de ' + esc(App.city(b.base).nome) + '</b>' +
+        '<small>Ida e volta no mesmo dia, sem hospedagem. Ocupa um dia da sua estadia em ' + esc(App.city(b.base).nome) + '.</small></div></div>' +
+        bvDiaSelect(b);
+      if (b.aviso) h += '<p class="warn-line">' + esc(b.aviso) + '</p>';
+      h += '<ol class="itin bv-legs">' + legCard(b.leg) + '</ol><div class="links tight">';
+      if (outras.length) {
+        h += '<select class="bv-sel" data-bv-base="' + c.id + '" aria-label="Fazer o bate-volta a partir de outra cidade"><option value="">Sair de outra cidade…</option>' +
+          outras.map(x => '<option value="' + x.base + '">' + esc(App.city(x.base).nome) + ' · ' + horasTxt(x) + '</option>').join('') + '</select>';
+      }
+      return h + '<button type="button" class="btn" data-act="bv-off" data-id="' + c.id + '">Dormir aqui (virar parada)</button></div></div>';
+    }
+    if (!boas.length || (cs.sel && App.route().length < 2)) return '';
+    const melhor = boas[0];
+    let h = '<div class="bv-box"><div class="bv-box-h"><span class="bv-ic" aria-hidden="true">↺</span><div><b>Dá para fazer em um bate-volta</b>' +
+      '<small>' + esc(c.nome) + ' fica a ' + horasTxt(melhor) + ' de ' + esc(App.city(melhor.base).nome) + ': vá e volte no mesmo dia, sem trocar de hospedagem.</small></div></div>' +
+      '<div class="links tight"><button type="button" class="btn' + (cs.sel ? '' : ' primary') + '" data-act="bv-set" data-id="' + c.id + '" data-base="' + melhor.base + '">↺ Bate-volta a partir de ' + esc(App.city(melhor.base).nome) + '</button>';
+    if (boas.length > 1) {
+      h += '<select class="bv-sel" data-bv-base="' + c.id + '" aria-label="Bate-volta a partir de outra cidade"><option value="">Outra cidade…</option>' +
+        boas.slice(1).map(x => '<option value="' + x.base + '">' + esc(App.city(x.base).nome) + ' · ' + horasTxt(x) + '</option>').join('') + '</select>';
+    }
+    return h + '</div></div>';
+  }
+
+  // Na cidade do roteiro: bate-voltas que saem dela e sugestões de cidades perto.
+  function bvDaquiHtml(c) {
+    const App = A(), lista = App.calc.bvByBase[c.id] || [], sug = App.destinosBV(c.id).slice(0, 8);
+    if (!lista.length && !sug.length) return '';
+    let h = '<h4>Bate-voltas a partir de ' + esc(c.nome) + ' <small>ida e volta no mesmo dia</small></h4>';
+    if (lista.length) h += '<ul class="bv-pts">' + lista.map(b => '<li><button type="button" class="lnk" data-act="open-city" data-id="' + b.cityId + '">↺ ' + esc(App.city(b.cityId).nome) + '</button><small>' +
+      Fmt.dow(b.date) + ' ' + Fmt.data(b.date) + ' · <span data-out="city-sub:' + b.cityId + '"></span></small></li>').join('') + '</ul>';
+    if (sug.length) h += '<div class="chips wrap">' + sug.map(x => '<button type="button" class="chip add" data-act="bv-set" data-id="' + x.id + '" data-base="' + c.id + '" title="' + esc(horasTxt(x)) + ' cada trecho">+ ' + esc(App.city(x.id).nome) + ' <small>' + Fmt.horas(x.horas) + '</small></button>').join('') + '</div>';
+    return h;
+  }
+
   function viewRoteiro() {
     const App = A(), S = App.state, c = App.calc;
     const ida = c.segs[0], volta = c.segs[c.segs.length - 1];
@@ -745,6 +839,7 @@
           '<button type="button" data-act="down" data-id="' + id + '" data-fid="dn-' + id + '" aria-label="Mover para baixo"' + (i === c.route.length - 1 ? ' disabled' : '') + '>↓</button>' +
           '<button type="button" data-act="toggle-city" data-id="' + id + '" aria-label="Remover do roteiro" title="Remover do roteiro">×</button></div>' +
         '</div></li>';
+      html += bvCards(id);
     });
     if (c.route.length) html += legCard(c.legs[c.legs.length - 1]);
     else html += '<li class="empty">Nenhuma cidade no roteiro. Inclua uma abaixo ou clique em uma cidade no mapa.</li>';
@@ -807,18 +902,22 @@
 
     let html = UI.photo(c.wiki, c.nome, 'd-photo') + '<div class="d-body">' +
       '<div class="kicker">' + esc(c.pais) + ' · ' + esc(c.moeda) + '</div><h2>' + esc(c.nome) + '</h2>';
-    if (cs.sel && seg) html += '<p class="d-meta">' + Fmt.dow(seg.start) + ' ' + datasCidade(seg) + ' · ' + noitesTxt(cs.noites) + ' · <b data-out="city-sub:' + c.id + '"></b></p>';
+    const bv = App.calc.bvByCity[c.id];
+    if (bv) html += '<p class="d-meta"><span class="bv-tag">↺ Bate-volta</span> ' + Fmt.dow(bv.date) + ', ' + Fmt.data(bv.date) + ' · a partir de ' + esc(App.city(bv.base).nome) + ' · <b data-out="city-sub:' + c.id + '"></b></p>';
+    else if (cs.sel && seg) html += '<p class="d-meta">' + Fmt.dow(seg.start) + ' ' + datasCidade(seg) + ' · ' + noitesTxt(cs.noites) + ' · <b data-out="city-sub:' + c.id + '"></b></p>';
     else if (c.papel) html += '<p class="d-meta">' + esc(c.papel) + '</p>';
     html += '<button type="button" class="btn big' + (cs.sel ? '' : ' primary') + '" data-act="toggle-city" data-fid="tc-' + c.id + '" data-id="' + c.id + '">' +
-      (cs.sel ? 'Remover cidade do roteiro' : '✓ Incluir cidade no roteiro') + '</button>';
+      (bv ? 'Remover bate-volta' : cs.sel ? 'Remover cidade do roteiro' : '✓ Incluir no roteiro (com pernoite)') + '</button>';
+    html += bvBox(c);
     if (c.nota) html += '<p class="note">' + esc(c.nota) + '</p>';
     html += window.Clima.cityHtml(c);
 
     if (cs.sel) {
-      html += '<h4>Gastos na cidade</h4>' + D.categorias.map(k => money(k.nome, 'cities.' + c.id + '.custos.' + k.id)).join('');
-      html += window.Assistente.cityHtml(c);
+      html += '<h4>Gastos na cidade</h4>' + D.categorias.filter(k => !bv || k.id !== 'hospedagem').map(k => money(k.nome, 'cities.' + c.id + '.custos.' + k.id)).join('');
+      if (!bv) html += window.Assistente.cityHtml(c);
     }
-    html += hospSection(c) + '<h4>Passagens aéreas</h4>' + UI.flightRows(c.id);
+    if (!bv) html += hospSection(c) + '<h4>Passagens aéreas</h4>' + UI.flightRows(c.id);
+    if (cs.sel && !bv) html += bvDaquiHtml(c);
 
     html += window.DiaADia.cityHtml(c);
 
@@ -921,6 +1020,7 @@
     const App = A(), c = App.calc, S = App.state;
     const legs = {};
     c.legs.forEach(l => { legs[l.key] = l; });
+    c.bvs.forEach(b => { legs[b.leg.key] = b.leg; });
     $$('[data-out]').forEach(el => {
       const i = el.dataset.out.indexOf(':');
       const kind = i < 0 ? el.dataset.out : el.dataset.out.slice(0, i), id = i < 0 ? '' : el.dataset.out.slice(i + 1);

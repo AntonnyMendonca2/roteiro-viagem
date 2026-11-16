@@ -506,7 +506,7 @@
     // desenha um pedaço de rota (linha + área de toque + selo do meio de transporte)
     const addPath = (leg, modo, active, d, mid, real) => {
         const geo = { d, mid };
-        const p = (active ? gAct : gAlt).append('path').attr('class', 'route ' + (active ? 'active ' : 'alt ') + modo + (real ? ' real' : '')).attr('d', geo.d);
+        const p = (active ? gAct : gAlt).append('path').attr('class', 'route ' + (active ? 'active ' : 'alt ') + modo + (real ? ' real' : '') + (leg.bv ? ' bv' : '')).attr('d', geo.d);
         if (!geo.mid) { const el = p.node(), pt = el.getPointAtLength(el.getTotalLength() / 2); geo.mid = { x: pt.x, y: pt.y }; }
         gHit.append('path').attr('class', 'route-hit').attr('d', geo.d)
           .on('pointerenter pointermove', e => { p.classed('hover', true); showTip(e, leg, modo, active); })
@@ -548,6 +548,7 @@
       if (outro && leg.opts[outro]) legPaths(leg, outro, false);
     });
     legs.forEach(leg => legPaths(leg, leg.modo, true));
+    (A().calc.bvs || []).forEach(b => legPaths(b.leg, b.leg.modo, true));      // bate-voltas: tracejado, ida e volta
 
     if (animate && !REDUCED && segs.length) {
       // "desenha" a rota trecho por trecho com stroke-dashoffset
@@ -627,6 +628,7 @@
 
     L.cities.selectAll('g.city')
       .classed('sel', d => S.cities[d.id].sel)
+      .classed('bv', d => !!(calc.bvByCity && calc.bvByCity[d.id]))
       .classed('dim', d => !!tag && !App.poisOf(d.id).some(p => p.tags.indexOf(tag) >= 0))
       .classed('focus', d => !!App.focus && App.focus.type === 'city' && App.focus.id === d.id)
       .each(function (d) {
@@ -761,12 +763,14 @@
     countryState();
 
     if (ready) {
-      const sig = calc.legs.map(l => l.key + ':' + l.modo).join('|');
+      const sig = rotaSig(calc);
       if (sig !== routeSig) { routeSig = sig; drawRoutes(true); }
     }
   };
 
   // A lista de pontos mudou (ponto criado ou excluído pelo usuário, importação): refaz os marcadores.
+  const rotaSig = calc => calc.legs.concat((calc.bvs || []).map(b => b.leg)).map(l => l.key + ':' + l.modo).join('|');
+
   M.rebuildPois = function () {
     if (!projection) return;
     poiPts = A().pois().map(p => { const q = projection([p.lon, p.lat]); return { id: p.id, p, x: q[0], y: q[1] }; });
@@ -796,7 +800,7 @@
   // Redesenha as rotas sem repetir a animação (ex.: chegou o traçado real de um trem).
   M.refreshRoutes = function () {
     if (!ready || !A().calc) return;
-    routeSig = A().calc.legs.map(l => l.key + ':' + l.modo).join('|');
+    routeSig = rotaSig(A().calc);
     drawRoutes(false);
   };
 

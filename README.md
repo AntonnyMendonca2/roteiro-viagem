@@ -216,6 +216,17 @@ Se você quiser que os jogos apareçam sozinhos, crie um **Cloudflare Worker** q
 
 Com isso, o app busca os jogos **em casa** dos clubes das cidades do roteiro (dois dias antes da chegada até dois dias depois da saída), guarda por 12 horas e mostra com a etiqueta "automático". O Worker só aceita os domínios autorizados, só repassa a consulta "jogos de um time entre duas datas" e guarda cada resposta por 6 horas. O plano grátis da football-data.org cobre as grandes ligas (Inglaterra, Alemanha, Espanha, Itália, França, Holanda, Portugal e a Champions); os clubes cobertos têm o campo `fd` (número do time na API) no `js/data-futebol.js` — os números foram anotados de memória: se algum clube não trouxer jogos, confira o número em `https://api.football-data.org/v4/competitions/<liga>/teams`. Clubes de outras ligas (ex.: a polonesa) continuam só com o cadastro à mão. Não funciona em `file://` (o navegador não envia o domínio).
 
+### Bate-volta de cidade
+
+Qualquer cidade pode ser visitada **em um dia, indo e voltando** a partir de uma cidade do roteiro, sem pernoite (ex.: Liverpool a partir de Londres, Madri a partir de Barcelona):
+
+- No painel da cidade, **"Dá para fazer em um bate-volta"** aparece quando há uma cidade do roteiro a até 4 h dela; no painel de uma cidade do roteiro, **Bate-voltas a partir de…** lista as cidades perto com o tempo de viagem (**+ Cidade** inclui).
+- O bate-volta **não entra na sequência da rota nem muda as datas**: ocupa um dia da estadia na base (de preferência um dia inteiro; dá para escolher o dia). Se a base sair do roteiro, ele sai junto.
+- Em **Meu roteiro** ele fica num cartão tracejado logo abaixo da base; expandido, mostra o dia, o trecho de **ida e volta** (meio de transporte, horários reais do trem, busca de voos, **valor real** das duas passagens somadas e link) e os pontos escolhidos na cidade.
+- O custo soma o trecho de ida e volta (estimativa × 2 ou o valor real), os pontos e os gastos da cidade (sem hospedagem).
+- No mapa, o trecho é tracejado e a cidade vira um anel; na linha do tempo, o dia leva o nome da cidade (↺); no **Dia a dia** da base, o dia mostra a agenda do bate-volta, com saída às 8h e a volta.
+- **Dormir em… (virar parada)** transforma o bate-volta em parada com pernoite, e vice-versa.
+
 ### Cenários A/B/C
 
 O botão **Cenário** (barra superior) guarda várias versões do roteiro — por exemplo "Com Roma" e "Só Leste Europeu":

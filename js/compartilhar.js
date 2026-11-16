@@ -132,7 +132,7 @@
     const entram = D.cities.filter(c => sel(O, c.id) && !sel(S, c.id)).sort((a, b) => O.cities[a.id].ordem - O.cities[b.id].ordem);
     const novas = {};
     entram.forEach((c, i) => {
-      S.cities[c.id].sel = true; S.cities[c.id].noites = O.cities[c.id].noites;
+      S.cities[c.id].sel = true; S.cities[c.id].bv = ''; S.cities[c.id].noites = O.cities[c.id].noites;
       S.cities[c.id].ordem = minhas.length > 1 ? ini + (fim - ini) * (i + 1) / (entram.length + 1) : fim + i + 1;
       novas[c.id] = true; cidades++;
     });
