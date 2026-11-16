@@ -766,6 +766,54 @@
   });
 
   /* ------------------------------------------------------------ utilitários */
+  grupo('Links curtos');
+
+  // Simula o Worker (worker/roteiro.js) trocando o fetch durante o teste.
+  async function comWorker(resposta, fn) {
+    const fetchReal = window.fetch, urlReal = D.config.linkCurtoUrl, guardado = {};
+    D.config.linkCurtoUrl = 'https://links.teste.workers.dev/';
+    window.fetch = (url, o) => {
+      if (resposta === 'rede') return Promise.reject(new TypeError('Failed to fetch'));
+      if (o && o.method === 'POST') { guardado.k7Qm2xPaB4 = o.body; return Promise.resolve(new Response(JSON.stringify({ id: 'k7Qm2xPaB4' }), { status: 200 })); }
+      const id = new URL(url).searchParams.get('id');
+      return Promise.resolve(guardado[id] ? new Response(JSON.stringify({ codigo: guardado[id] }), { status: 200 })
+        : new Response(JSON.stringify({ erro: 'Link não encontrado.' }), { status: 404 }));
+    };
+    try { return await fn(); } finally { window.fetch = fetchReal; D.config.linkCurtoUrl = urlReal; }
+  }
+
+  teste('Sem Worker configurado: link completo (#r=)', async () => {
+    novoEstado();
+    const r = await window.Compartilhar.link({});
+    ok(/#r=1[zj]/.test(r.url), r.url.slice(-40));
+    ok(!r.curto, 'não deveria ser curto');
+  });
+
+  teste('Com Worker: link curto (#s=) e o completo como alternativa; ida e volta', async () => {
+    const S = novoEstado();
+    S.cities.liverpool.sel = true; S.cities.liverpool.bv = 'londres';
+    await comWorker('ok', async () => {
+      const r = await window.Compartilhar.link({});
+      ok(/#s=k7Qm2xPaB4$/.test(r.url), r.url);
+      ok(r.curto && /#r=1[zj]/.test(r.longo), 'link completo');
+      const obj = await window.Compartilhar.buscar('k7Qm2xPaB4').then(window.Compartilhar.decodificar);
+      const e = window.Compartilhar.estadoDe(obj);
+      igual(e.cities.liverpool.bv, 'londres', 'bate-volta preservado');
+      let erro = '';
+      await window.Compartilhar.buscar('XXXXXXXXXX').catch(x => { erro = x.message; });
+      ok(/não encontrado/.test(erro), 'erro de link inexistente: ' + erro);
+    });
+  });
+
+  teste('Worker fora do ar: volta para o link completo, com o motivo', async () => {
+    novoEstado();
+    await comWorker('rede', async () => {
+      const r = await window.Compartilhar.link({});
+      ok(/#r=1[zj]/.test(r.url) && !r.curto, 'deveria cair no link completo');
+      ok(r.erroCurto, 'sem motivo');
+    });
+  });
+
   grupo('Bate-volta de cidade');
 
   // Liverpool como bate-volta a partir de Londres (3 noites no padrão).

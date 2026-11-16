@@ -72,6 +72,7 @@ js/compartilhar.js link de compartilhamento (roteiro dentro do link), QR code, m
 js/futebol.js    clubes, jogos cadastrados à mão, avisos de data e busca automática opcional
 js/data-futebol.js clubes de cada cidade, DATA.jogos e o endereço do proxy opcional
 worker/futebol.js Cloudflare Worker opcional (guarda a chave da football-data.org)
+worker/roteiro.js Cloudflare Worker opcional (links curtos de compartilhamento)
 js/map.js       mapa D3, rotas e animações
 js/ui.js        painéis, inputs, roteiro, orçamento, linha do tempo, legenda
 js/app.js       estado (localStorage), cálculos e inicialização
@@ -248,6 +249,19 @@ O botão **Compartilhar** (barra superior e aba **Dados**) gera um link com o ro
 - Quem abre o link vê a faixa **"Você está vendo um roteiro compartilhado"**, com: **Só visualizar** (modo leitura — nada é salvo no navegador), **Usar este roteiro** (substitui o seu, com confirmação e *Desfazer*), **Mesclar** (acrescenta ao seu as cidades e os pontos que você não tem, sem trazer valores) e **Voltar ao meu**.
 - Funciona também em `file://`, mas aí o link só abre no mesmo computador.
 
+#### Links curtos (opcional)
+
+Com vários cenários, pontos e valores, o link completo passa de 2 mil caracteres. Com um **Cloudflare Worker** seu, o roteiro (o mesmo `1z…` compactado) fica guardado num banco KV da sua conta e o link leva só um código de 10 letras: `…/roteiro-viagem/#s=k7Qm2xPaB4`. O plano grátis da Cloudflare basta (KV grátis: 1.000 gravações e 100 mil leituras por dia). O código vem do conteúdo, então o mesmo roteiro gera sempre o mesmo link.
+
+1. Em <https://dash.cloudflare.com>, abra **Storage & Databases → KV → Create** e crie um namespace chamado `roteiros`.
+2. Em **Workers & Pages → Create → Create Worker**, dê um nome (ex.: `links`) e clique em **Deploy**.
+3. **Edit code**: apague o exemplo, cole o conteúdo de `worker/roteiro.js` e clique em **Deploy**.
+4. No Worker, **Settings → Bindings → Add → KV namespace**: *Variable name* `ROTEIROS`, namespace `roteiros`.
+5. Em **Settings → Variables and Secrets**, adicione `ALLOWED_ORIGINS` (tipo **Text**) com o endereço do seu site **sem a pasta**, ex.: `https://seu-usuario.github.io` (para testar no computador, acrescente `,http://localhost:8000`). Opcional: `TTL_DIAS` para apagar os links depois de N dias (sem ela, não expiram).
+6. Copie o endereço do Worker (ex.: `https://links.seu-usuario.workers.dev`) para `linkCurtoUrl`, no `DATA.config` do `js/data.js`, e publique.
+
+Com isso, **Compartilhar** passa a mostrar o link curto (o QR code também fica bem menor), com a opção **Copiar o link completo**, que não depende do servidor. Se o Worker estiver fora do ar, a janela avisa e mostra o link completo. Os links `#r=` antigos continuam abrindo. Importante: o link curto só funciona enquanto o roteiro estiver no seu KV; se você apagar o Worker ou o namespace, ele para de abrir.
+
 ## APIs externas
 
 Todas são gratuitas, sem chave e chamadas direto do navegador. As respostas ficam guardadas no
@@ -264,6 +278,7 @@ guardado ou mostra um aviso discreto. Nenhuma chave de API fica no código do si
 | Fotos, lugares próximos e popularidade | Wikipedia / Wikimedia | 30 dias |
 | QR code do link de compartilhamento | biblioteca `qrcode-generator@1.4.4` (jsDelivr), carregada só ao abrir a janela | — |
 | Jogos de futebol (opcional, desligado por padrão) | football-data.org **pelo seu Cloudflare Worker** (a chave fica no Worker) | 12 h |
+| Links curtos de compartilhamento (opcional, desligado por padrão) | **seu Cloudflare Worker** + KV (`worker/roteiro.js`) | — |
 
 ## Testes
 

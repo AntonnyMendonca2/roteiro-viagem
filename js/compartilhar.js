@@ -9,6 +9,11 @@
                                         └─ versão do formato (links antigos continuam abrindo)
 
    <dados> = base64url do JSON só com o que difere do roteiro padrão.
+
+   Links curtos (opcional): com DATA.config.linkCurtoUrl preenchido, o "1z..."
+   fica guardado no Cloudflare Worker do usuário (worker/roteiro.js) e o link
+   leva só o código:  https://usuario.github.io/repo/#s=k7Qm2xPaB4
+   Se o Worker falhar, o link volta a ser o longo (#r=).
    ========================================================================== */
 (function () {
   'use strict';
@@ -106,8 +111,38 @@
   };
 
   const base = () => window.location.href.split('#')[0];
+  const curtoUrl = () => { const u = String(D.config.linkCurtoUrl || '').trim().replace(/\/+$/, ''); return /^https:\/\//.test(u) ? u : ''; };
+  Comp.temCurto = () => !!curtoUrl();
+
+  // Guarda o roteiro codificado no Worker e devolve o código curto.
+  Comp.guardar = function (cod) {
+    return fetch(curtoUrl() + '/', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: cod })
+      .then(r => r.json().catch(() => ({})).then(j => {
+        if (!r.ok || !j || !/^[A-Za-z0-9_-]{10}$/.test(j.id || '')) throw new Error(j && j.erro ? j.erro : 'o servidor respondeu ' + r.status);
+        return j.id;
+      }));
+  };
+
+  // Busca no Worker o roteiro de um link curto.
+  Comp.buscar = function (id) {
+    if (!curtoUrl()) return Promise.reject(new Error('Este site não está configurado para links curtos.'));
+    return fetch(curtoUrl() + '/?id=' + encodeURIComponent(id))
+      .catch(() => { throw new Error('Sem conexão com o servidor dos links.'); })
+      .then(r => r.json().catch(() => ({})).then(j => {
+        if (!r.ok || typeof j.codigo !== 'string') throw new Error(j && j.erro ? j.erro : 'O servidor respondeu ' + r.status + '.');
+        return j.codigo;
+      }));
+  };
+
+  // { url, longo, compactado, curto, erroCurto }
   Comp.link = function (opts) {
-    return Comp.codificar(Comp.montar(A().state, opts), opts).then(cod => ({ url: base() + '#r=' + cod, compactado: cod.charAt(1) === 'z' }));
+    return Comp.codificar(Comp.montar(A().state, opts), opts).then(cod => {
+      const r = { url: base() + '#r=' + cod, compactado: cod.charAt(1) === 'z', curto: false, erroCurto: '' };
+      r.longo = r.url;
+      if (!curtoUrl()) return r;
+      return Comp.guardar(cod).then(id => Object.assign(r, { url: base() + '#s=' + id, curto: true }))
+        .catch(e => Object.assign(r, { erroCurto: e && e.message ? e.message : 'falha de rede' }));
+    });
   };
 
   /* ================================================================== mesclar */
@@ -230,9 +265,10 @@
   };
 
   function lerHash() {
-    const m = /^#r=(.+)$/.exec(window.location.hash || '');
-    if (!m) return;
-    Comp.decodificar(m[1]).then(Comp.receber).catch(e => {
+    const h = window.location.hash || '', m = /^#r=(.+)$/.exec(h), s = /^#s=([A-Za-z0-9_-]{10})$/.exec(h);
+    if (!m && !s) return;
+    if (s) window.UI.toast('Abrindo o roteiro compartilhado…', 2500);
+    (s ? Comp.buscar(s[1]) : Promise.resolve(m[1])).then(Comp.decodificar).then(Comp.receber).catch(e => {
       limparHash();
       window.UI.toast('Não foi possível abrir o roteiro compartilhado. ' + (e && e.message ? e.message : ''), 7000);
     });
@@ -275,7 +311,8 @@
     const S = A().state, n = S.cenarios.length, local = window.location.protocol === 'file:';
     el.innerHTML = '<div class="fc-head"><div><div class="kicker">Compartilhar</div><h3>Link do roteiro</h3></div>' +
       '<button type="button" class="fc-x" data-act="share-close" aria-label="Fechar">×</button></div>' +
-      '<p class="sh-aviso"><b>Atenção:</b> o link leva o roteiro inteiro — cidades, pontos, datas, <b>hospedagens marcadas e todos os valores</b>. Quem tiver o link vê tudo. Nada é enviado a servidor: os dados ficam no próprio link.</p>' +
+      '<p class="sh-aviso"><b>Atenção:</b> o link leva o roteiro inteiro — cidades, pontos, datas, <b>hospedagens marcadas e todos os valores</b>. Quem tiver o link vê tudo. ' +
+        (Comp.temCurto() ? 'O roteiro fica guardado no seu servidor de links (Cloudflare Worker) e o link leva só um código.' : 'Nada é enviado a servidor: os dados ficam no próprio link.') + '</p>' +
       '<label class="check"><input type="checkbox" data-share-opt="privado"' + (opcoes.privado ? ' checked' : '') + '><span>Não incluir hospedagens e valores</span></label>' +
       (n > 1 ? '<label class="check"><input type="checkbox" data-share-opt="todos"' + (opcoes.todos ? ' checked' : '') + '><span>Incluir todos os cenários <small>(' + n + '; sem marcar, vai só o cenário ativo: ' + window.UI.esc(window.Cenarios.ativo().nome) + ')</small></span></label>' : '') +
       '<input id="sh-link" class="sh-link" type="text" readonly value="Gerando o link…" aria-label="Link do roteiro">' +
@@ -296,8 +333,10 @@
       const inp = document.getElementById('sh-link'), tam = document.getElementById('sh-tam'), qr = document.getElementById('sh-qr');
       if (!inp) return;
       inp.value = r.url;
-      tam.textContent = 'Link com ' + r.url.length.toLocaleString('pt-BR') + ' caracteres' + (r.compactado ? ' (compactado)' : ' (sem compactar: este navegador não tem CompressionStream)') +
-        (r.url.length > 2000 ? '. Alguns aplicativos de mensagem cortam links muito longos — prefira “Não incluir hospedagens e valores” ou só o cenário ativo.' : '.');
+      if (r.curto) tam.innerHTML = 'Link curto (' + r.url.length + ' caracteres). <button type="button" class="lnk" data-act="share-longo">Copiar o link completo</button> <small>— não depende do servidor</small>';
+      else tam.textContent = (r.erroCurto ? 'Não foi possível gerar o link curto (' + r.erroCurto + '); este é o link completo. ' : '') +
+        'Link com ' + r.url.length.toLocaleString('pt-BR') + ' caracteres' + (r.compactado ? ' (compactado)' : ' (sem compactar: este navegador não tem CompressionStream)') +
+        (r.url.length > 2000 ? '. Alguns aplicativos de mensagem cortam links muito longos — prefira “Não incluir hospedagens e valores” ou só o cenário ativo' + (Comp.temCurto() ? '' : ', ou configure os links curtos (veja o README)') + '.' : '.');
       qr.innerHTML = '<span class="muted">Gerando o QR code…</span>';
       carregarQr().then(lib => {
         if (meuPedido !== pedido || !document.getElementById('sh-qr')) return;
@@ -308,14 +347,15 @@
     });
   }
 
-  function copiar() {
+  function copiar(longo) {
     if (!atual) return;
-    const UI = window.UI, inp = document.getElementById('sh-link');
+    const UI = window.UI, inp = document.getElementById('sh-link'), url = longo ? atual.longo : atual.url;
+    const ok = () => UI.toast(longo ? 'Link completo copiado.' : 'Link copiado.');
     const naMao = () => {
-      try { inp.focus(); inp.select(); if (document.execCommand('copy')) { UI.toast('Link copiado.'); return; } } catch (e) { /* segue */ }
+      try { inp.value = url; inp.focus(); inp.select(); if (document.execCommand('copy')) { ok(); inp.value = atual.url; return; } } catch (e) { /* segue */ }
       UI.toast('Não foi possível copiar sozinho: selecione o link e copie.');
     };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(atual.url).then(() => UI.toast('Link copiado.'), naMao);
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(ok, naMao);
     else naMao();
   }
 
@@ -329,7 +369,8 @@
     const UI = window.UI;
     UI.actions['share'] = () => Comp.abrir();
     UI.actions['share-close'] = () => Comp.fechar();
-    UI.actions['share-copy'] = copiar;
+    UI.actions['share-copy'] = () => copiar(false);
+    UI.actions['share-longo'] = () => copiar(true);
     UI.actions['share-native'] = () => {
       if (!atual || !navigator.share) return;
       navigator.share({ title: 'Roteiro de viagem', text: 'Veja o meu roteiro de viagem', url: atual.url }).catch(() => { /* cancelado pelo usuário */ });

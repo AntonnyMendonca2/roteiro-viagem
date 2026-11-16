@@ -20,7 +20,10 @@ window.DATA = {
     viajantes: 1,                     // nº de pessoas nas buscas de voos e hospedagem
     hospedagemPernoite: { v: 80, cur: 'EUR' }, // estimativa de 1 noite em parada de trem
     // dia a dia: horários de cada tipo de dia e limites (veja js/diaadia.js)
-    diaADia: { inicioH: 9, fimH: 19, chegadaH: 14, partidaH: 12, puxadoH: 10, bateVoltaLongoH: 4 }
+    diaADia: { inicioH: 9, fimH: 19, chegadaH: 14, partidaH: 12, puxadoH: 10, bateVoltaLongoH: 4 },
+    // links curtos (opcional): endereço do seu Cloudflare Worker (worker/roteiro.js; veja "Links curtos" no README).
+    // Vazio = o roteiro vai inteiro dentro do link.
+    linkCurtoUrl: ''
   },
 
   /* ------------------------------------------------------ moedas e câmbio */
