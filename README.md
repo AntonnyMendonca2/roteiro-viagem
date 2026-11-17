@@ -61,6 +61,8 @@ js/data.js      objeto DATA: cidades e pontos do roteiro original, trechos, câm
 js/data-europa.js    Europa completa: demais cidades, moedas, trechos (trem/ônibus/balsa/avião)
 js/data-rotas.js     destinos diretos de cada aeroporto de saída (GERADO por npm run rotas)
 js/rotas.js     leitor da tabela de destinos da Wikipedia e atualização em segundo plano
+js/divisao.js   divisão de gastos entre quem viaja (quem deve a quem)
+js/feriados.js  feriados nacionais (Nager.Date) e comércio fechado aos domingos
 js/tour.js      tour guiado da primeira visita (sem biblioteca externa)
 js/consent.js   banner de cookies (LGPD), Google Consent Mode v2 e carregamento do AdSense
 js/paginas.js   preenche nome/e-mail do responsável nas páginas de texto
@@ -323,6 +325,23 @@ Precisa do Worker de links curtos (abaixo) com o código atual de `worker/roteir
 - O KV da Cloudflare pode levar até ~1 minuto para mostrar uma mudança em outra região do mundo; entre pessoas no mesmo país costuma ser imediato. Cada mudança salva conta como 1 gravação (o plano grátis permite 1.000 por dia).
 - Criar o link de edição pede o CAPTCHA; os salvamentos não, mas o Worker aceita no máximo 30 por minuto de cada pessoa (IP) em cada roteiro. Acima disso a barra mostra **muitas mudanças, aguardando…** e o app tenta de novo sozinho.
 
+### Divisão de gastos
+
+No fim da aba **Orçamento**: cadastre quem viaja e diga **quem pagou** cada gasto (os mesmos do total
+da viagem: gastos de cada cidade, passeios, trechos, pernoites e itens gerais, com o mesmo valor do
+orçamento) e, se quiser, **entre quem dividir** (padrão: todos; clique nas iniciais). Dá para lançar gastos
+avulsos ("Jantar em Paris"). O app mostra quanto cada um pagou, a parte de cada um e os **acertos**
+("Ana paga R$ 320,00 a Bruno"), com o menor número de transferências. A conta vai junto com a edição em
+conjunto e fica fora do link "sem hospedagens e valores" (`js/divisao.js`).
+
+### Feriados e fechamentos
+
+Os feriados **nacionais** de cada país nas datas do roteiro (Nager.Date, guardados por 30 dias) aparecem
+com uma faixa azul no dia da linha do tempo, na seção **Feriados e fechamentos** do painel da cidade e no
+dia a dia. Na Alemanha, Áustria, Suíça, Polônia, Noruega e Croácia, o painel avisa que as lojas
+(inclusive supermercados) fecham aos domingos. Visita fixada num feriado ganha o aviso "confira o
+horário". Feriados regionais ficam de fora: o app não sabe a região de cada cidade (`js/feriados.js`).
+
 ### Tour guiado
 
 Na primeira visita, depois da escolha de cookies, o app oferece um tour (**Fazer o tour** ou **Pular**)
@@ -369,6 +388,7 @@ guardado ou mostra um aviso discreto. Nenhuma chave de API fica no código do si
 | Fotos, lugares próximos e popularidade | Wikipedia / Wikimedia | 30 dias |
 | QR code do link de compartilhamento | biblioteca `qrcode-generator@1.4.4` (jsDelivr), carregada só ao abrir a janela | — |
 | Voos diretos do aeroporto de saída | Wikipedia (tabela "Airlines and destinations"), só do aeroporto escolhido | 30 dias |
+| Feriados nacionais nas datas do roteiro | [Nager.Date](https://date.nager.at) (por país e ano) | 30 dias |
 | Jogos de futebol (opcional, desligado por padrão) | football-data.org **pelo seu Cloudflare Worker** (a chave fica no Worker) | 12 h |
 | Links curtos de compartilhamento (opcional, desligado por padrão) | **seu Cloudflare Worker** + KV (`worker/roteiro.js`) | — |
 | CAPTCHA ao gerar link curto / link de edição | Cloudflare Turnstile (`challenges.cloudflare.com`), carregado só no clique | — |

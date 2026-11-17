@@ -1274,6 +1274,112 @@
     });
   });
 
+  grupo('Divisão de gastos');
+
+  const P3 = [{ id: 'pana', nome: 'Ana' }, { id: 'pbru', nome: 'Bruno' }, { id: 'pcai', nome: 'Caio' }];
+
+  teste('Conta: quem pagou, parte de cada um e acertos mínimos', () => {
+    const Dv = window.Divisao;
+    const r = Dv.calcular([{ chave: 'g:a', brl: 300 }, { chave: 'g:b', brl: 100 }], P3,
+      { 'g:a': { por: 'pana', entre: [] }, 'g:b': { por: 'pbru', entre: ['pbru', 'pcai'] } });
+    igual([r.pessoas.pana.saldo, r.pessoas.pbru.saldo, r.pessoas.pcai.saldo], [200, -50, -150]);
+    igual(r.acertos, [{ de: 'pcai', para: 'pana', valor: 150 }, { de: 'pbru', para: 'pana', valor: 50 }]);
+    igual(r.total, 400);
+  });
+
+  teste('Conta: centavos (R$ 100 entre 3) e gastos sem "quem pagou" ficam de fora', () => {
+    const r = window.Divisao.calcular([{ chave: 'g:a', brl: 100 }, { chave: 'g:b', brl: 55 }], P3, { 'g:a': { por: 'pcai', entre: [] }, 'g:b': { por: '', entre: [] } });
+    perto(r.pessoas.pana.parte, 33.33, 0.001);
+    perto(Object.keys(r.pessoas).reduce((a, k) => a + r.pessoas[k].saldo, 0), 0, 0.02);
+    igual(r.semPagador, { n: 1, brl: 55 });
+    igual(r.acertos.length, 2);
+  });
+
+  teste('Gastos da viagem: cidades, passeios, trechos e gerais (bate-volta sem hospedagem)', () => {
+    const S = novoEstado();
+    S.cities.paris.custos.hospedagem = { v: 400, cur: 'EUR' };
+    S.cities.liverpool.sel = true; S.cities.liverpool.bv = 'londres'; S.cities.liverpool.custos.hospedagem = { v: 99, cur: 'GBP' };
+    S.gerais.seguro = { v: 300, cur: 'BRL' };
+    App.calc = T.compute();
+    const it = window.Divisao.itens(S, App.calc), ch = it.map(i => i.chave);
+    ok(ch.indexOf('c:paris.hospedagem') >= 0, 'hospedagem de Paris');
+    ok(ch.indexOf('c:liverpool.hospedagem') < 0, 'bate-volta não tem hospedagem');
+    ok(ch.indexOf('p:torre-eiffel') >= 0, 'passeio selecionado');
+    ok(ch.some(c => /^l:/.test(c)), 'trechos');
+    ok(ch.indexOf('g:seguro') >= 0, 'item geral');
+    perto(it.reduce((a, i) => a + i.brl, 0), App.calc.total, 1, 'mesmo total do orçamento');
+  });
+
+  teste('Limpeza: pessoa removida sai de "pago por" e "dividir entre"; dados inválidos somem', () => {
+    const dv = window.Divisao.limpar({ pessoas: [{ id: 'pana', nome: ' Ana ' }, { id: 'xx', nome: 'inválida' }],
+      pagos: { 'g:seguro': { por: 'pbru', entre: ['pana', 'pbru'] }, 'lixo': { por: 'pana' } }, extras: [{ id: 'xab1', desc: 'Jantar', v: '80', cur: 'EUR', por: 'pana' }, { id: 'ruim' }] });
+    igual(dv.pessoas, [{ id: 'pana', nome: 'Ana' }]);
+    igual(dv.pagos, { 'g:seguro': { por: '', entre: ['pana'] } });
+    igual(dv.extras.map(e => [e.desc, e.v, e.cur, e.por]), [['Jantar', 80, 'EUR', 'pana']]);
+  });
+
+  teste('Vai na edição em conjunto e no link normal; fica fora do link "sem valores"', () => {
+    const S = novoEstado();
+    S.divisao = window.Divisao.limpar({ pessoas: P3.slice(0, 2), pagos: { 'g:seguro': { por: 'pana', entre: [] } } });
+    ok(window.Colab.dados(S).divisao, 'edição em conjunto');
+    igual(window.Compartilhar.estadoDe(window.Compartilhar.montar(S, {})).divisao.pessoas.length, 2, 'link normal');
+    igual(window.Compartilhar.estadoDe(window.Compartilhar.montar(S, { privado: true })).divisao.pessoas, [], 'link sem valores');
+  });
+
+  grupo('Feriados e fechamentos');
+
+  // Coloca feriados falsos no cache do país/ano e limpa no fim.
+  async function comFeriados(cc, ano, lista, fn) {
+    const k = window.Feriados._t.chave(cc, ano);
+    window.Net.cacheSet(k, lista);
+    try { return await fn(); } finally { window.Net.cacheDel(k); }
+  }
+
+  teste('Só feriados nacionais, com nome em português', () => {
+    const r = window.Feriados.reduzir([
+      { date: '2027-05-01', localName: 'Fête du Travail', name: 'Labour Day', global: true },
+      { date: '2027-03-19', localName: 'Josefstag', name: "Saint Joseph's Day", global: false, counties: ['AT-2'] }]);
+    igual(r, [{ d: '2027-05-01', nome: 'Dia do Trabalho', local: 'Fête du Travail' }]);
+  });
+
+  teste('Feriado na estadia: dia da linha do tempo, painel da cidade e aviso no ponto marcado', async () => {
+    const S = novoEstado(); App.calc = T.compute();
+    const dias = App.cityDays('paris'), dia = dias[2], iso = App.iso(dia);
+    await comFeriados('FR', iso.slice(0, 4), [{ d: iso, nome: 'Feriado de teste', local: 'Jour test' }], () => {
+      igual(window.Feriados.doDia('paris', dia).nome, 'Feriado de teste');
+      ok(!window.Feriados.doDia('londres', dia), 'outro país');
+      ok(/fer/.test(window.Feriados.tl('paris', dia).cls), 'marca na linha do tempo');
+      ok(/Feriado de teste/.test(window.Feriados.cityHtml(App.city('paris'))), 'painel da cidade');
+      ok(/Feriado/.test(window.Feriados.diaHtml('paris', dia)), 'dia a dia');
+      S.pois['montmartre'].dia = iso;
+      const w = App.poiWarn(App.poi('montmartre'));
+      ok(w && /feriado/.test(w.texto) && w.datas[0] === iso, 'aviso no ponto: ' + (w && w.texto));
+    });
+  });
+
+  teste('Domingo com comércio fechado (Alemanha sim, França não)', () => {
+    const S = novoEstado(); S.cities.berlim.sel = true; S.cities.berlim.ordem = 50; S.cities.berlim.noites = 7; App.calc = T.compute();
+    ok(window.Feriados.domingoFechado('berlim') && !window.Feriados.domingoFechado('paris'));
+    ok(/domingo/.test(window.Feriados.cityHtml(App.city('berlim'))), 'aviso de domingo em Berlim (7 noites têm um domingo)');
+  });
+
+  teste('Busca uma vez por país e ano (o resto vem do cache)', async () => {
+    const fetchReal = window.fetch, pedidos = [];
+    const S = novoEstado(); App.calc = T.compute();
+    const anos = [...new Set(App.calc.route.flatMap(id => App.cityDays(id).map(d => d.getUTCFullYear())))];
+    const limpar = () => ['GB', 'FR', 'PL'].forEach(cc => anos.forEach(a => { window.Net.cacheDel(window.Feriados._t.chave(cc, a)); delete window.Feriados._t.pedidos[cc + ':' + a]; }));
+    limpar();
+    window.fetch = url => { pedidos.push(String(url)); return Promise.resolve(new Response('[]', { status: 200 })); };
+    try {
+      window.Feriados.carregar();
+      await esperar(600);
+      igual(pedidos.map(u => u.replace(/^.*PublicHolidays\//, '')).sort(), ['GB', 'FR', 'PL'].flatMap(cc => anos.map(a => a + '/' + cc)).sort());
+      window.Feriados.carregar();
+      await esperar(300);
+      igual(pedidos.length, 3 * anos.length, 'segunda vez: cache');
+    } finally { window.fetch = fetchReal; limpar(); }
+  });
+
   grupo('Links curtos');
 
   // Simula o Worker (worker/roteiro.js) trocando o fetch durante o teste.

@@ -656,8 +656,9 @@
           const did = bv ? bv.cityId : id;
           const fb = seg.type === 'cidade' ? window.Futebol.tlHtml(did, d) : { html: '', titulo: '' };   // bola: jogo neste dia
           const wb = bv ? avisos[bv.cityId + '|' + App.iso(d)] : '';
-          const tit = (bv ? 'Bate-volta a ' + App.city(bv.cityId).nome + ' · ' : '') + ((w || wb) || (Fmt.dow(d) + ', ' + Fmt.data(d) + (wx.titulo ? ' · ' + wx.titulo : ''))) + (fb.titulo ? ' · ' + fb.titulo : '');
-          return '<button type="button" class="tl-day' + (w || wb ? ' warn' : '') + (bv ? ' bv' : '') + '" data-act="day" data-id="' + esc(did) + '" data-dia="' + App.iso(d) + '" title="' +
+          const fer = seg.type === 'cidade' && window.Feriados ? window.Feriados.tl(did, d) : { cls: '', titulo: '' };   // feriado nacional
+          const tit = (bv ? 'Bate-volta a ' + App.city(bv.cityId).nome + ' · ' : '') + (fer.titulo ? fer.titulo + ' · ' : '') + ((w || wb) || (Fmt.dow(d) + ', ' + Fmt.data(d) + (wx.titulo ? ' · ' + wx.titulo : ''))) + (fb.titulo ? ' · ' + fb.titulo : '');
+          return '<button type="button" class="tl-day' + (w || wb ? ' warn' : '') + (bv ? ' bv' : '') + fer.cls + '" data-act="day" data-id="' + esc(did) + '" data-dia="' + App.iso(d) + '" title="' +
             esc(tit) + '"><i>' + Fmt.dow(d) + '</i><b>' + Fmt.data(d) + '</b>' + (bv ? '<em class="tl-bv">↺ ' + esc(App.city(bv.cityId).nome) + '</em>' : wx.html) + fb.html + (w || wb ? '<u>!</u>' : '') + '</button>';
         }).join('') + '</div></div>';
     }).join('');
@@ -974,6 +975,7 @@
     html += '<label class="check"><input type="checkbox" data-fid="f-iof" data-path="iof"' + (S.iof ? ' checked' : '') +
       '><span>Somar IOF ' + Fmt.num(D.config.iofPct) + '% <small>em valores em moeda estrangeira (além do spread)</small></span></label>';
     html += '<p class="muted">Os gastos de cada cidade (hospedagem, alimentação, transporte local, compras, outros) ficam no painel da cidade: clique nela no mapa ou em "Meu roteiro". Pontos de interesse só entram no total quando estão selecionados.</p>';
+    html += window.Divisao.html();               // divisão de gastos entre quem viaja
     return html;
   }
 
@@ -1022,6 +1024,7 @@
     html += bvBox(c);
     if (c.nota) html += '<p class="note">' + esc(c.nota) + '</p>';
     html += window.Clima.cityHtml(c);
+    if (window.Feriados) html += window.Feriados.cityHtml(c);   // feriados e domingos com comércio fechado
 
     if (cs.sel) {
       html += '<h4>Gastos na cidade</h4>' + D.categorias.filter(k => k.id !== 'hospedagem').map(k => money(k.nome, 'cities.' + c.id + '.custos.' + k.id)).join('');

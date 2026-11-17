@@ -110,6 +110,7 @@
       ocultos: {},                              // sugestões ocultadas em "Descobrir por perto": { cidade: [títulos] }
       otim: { auto: true, criterio: 'tempo', fixarPontas: true },  // rota inteligente
       jogos: [],                                // jogos de futebol cadastrados por mim (futebol.js)
+      divisao: window.Divisao.padrao(),         // divisão de gastos entre quem viaja (divisao.js)
       cenarios: [], cenarioAtivo: '',           // cenários A/B/C (cenarios.js); o ativo fica "vivo" nos campos acima
       cenComparar: [], cenNoMapa: false         // cenários escolhidos para comparar · comparar no mapa
     };
@@ -238,6 +239,7 @@
     s.spread = Math.max(0, Math.min(30, num(s.spread)));
     s.jogos = (Array.isArray(s.jogos) ? s.jogos : []).map(j => window.Futebol.limpar(j)).filter(Boolean);
     s.jogos.forEach(j => { delete j.origem; });
+    s.divisao = window.Divisao.limpar(s.divisao);
     window.Cenarios.garantir(s);   // dados antigos: o roteiro atual vira o "Cenário A"
     return s;
   }
@@ -857,17 +859,21 @@
 
   // Aviso de "fechado no dia" (ex.: Louvre às terças) conforme as datas calculadas.
   App.poiWarn = function (p) {
-    if (!p.fechado || !App.poiActive(p.id)) return null;
+    if (!App.poiActive(p.id)) return null;
     const days = App.cityDays(p.cityId);
-    const fecha = d => p.fechado.indexOf(d.getUTCDay()) >= 0;
-    const quais = p.fechado.map(i => DIAS_PLURAL[i]).join(' e ');
     const fmt = d => window.Fmt.data(d) + ' (' + DIAS[d.getUTCDay()] + ')';
     const dia = App.state.pois[p.id].dia;
     const marcado = dia && days.find(d => App.iso(d) === dia);
+    // visita fixada num feriado nacional (js/feriados.js)
+    const fer = marcado && window.Feriados ? window.Feriados.doDia(p.cityId, marcado) : null;
+    const avisoFeriado = fer ? { nivel: 'leve', datas: [App.iso(marcado)], texto: 'A visita está marcada para um feriado (' + fer.nome + ', ' + fmt(marcado) + '): pode estar fechado ou com horário reduzido. Confira antes de ir.' } : null;
+    if (!p.fechado) return avisoFeriado;
+    const fecha = d => p.fechado.indexOf(d.getUTCDay()) >= 0;
+    const quais = p.fechado.map(i => DIAS_PLURAL[i]).join(' e ');
     if (marcado) {
       return fecha(marcado)
         ? { nivel: 'forte', datas: [App.iso(marcado)], texto: 'Fechado às ' + quais + ' — a visita está marcada para ' + fmt(marcado) + '. Escolha outro dia.' }
-        : null;
+        : avisoFeriado;
     }
     const ruins = days.filter(fecha);
     if (!ruins.length) return null;
@@ -1004,6 +1010,7 @@
     window.Cenarios.render();
     MapView.update();
     window.Clima.carregar();      // clima das cidades do roteiro (só busca o que falta)
+    if (window.Feriados) window.Feriados.carregar();   // feriados nacionais nas datas (Nager.Date, por país e ano)
     window.Trilhos.carregar();    // traçado real e paisagens dos trechos de trem (só o que falta)
     window.Futebol.carregar();    // jogos automáticos (só se o proxy opcional estiver configurado)
     if (App.focus && App.focus.type !== 'info') window.Ape.carregar(App.focus.type === 'city' ? App.focus.id : App.poi(App.focus.id).cityId);
@@ -1334,6 +1341,7 @@
     window.Compartilhar.bind();
     window.Colab.bind();
     window.Futebol.bind();
+    window.Divisao.bind();
     UI.renderAll();
     window.Cenarios.render();
     MapView.init();

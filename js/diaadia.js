@@ -337,7 +337,8 @@
       const tot = d.itens.length ? F.horas(d.atividadeH) + ' · ' + hhmm(d.ini) + '–' + hhmm(d.fim) : 'livre';
       let h = '<section class="dd-day' + (d.iso === ativo ? ' on' : '') + (d.puxado ? ' heavy' : '') + '" data-dd-day="' + d.iso + '" data-city="' + c.id + '">' +
         '<button type="button" class="dd-head" data-act="dd-day" data-id="' + c.id + '" data-dia="' + d.iso + '" data-fid="dd-' + d.iso + '">' +
-        '<b>' + F.dow(d.date) + ', ' + F.data(d.date) + '</b><small>' + [TIPO[d.tipo], tot].filter(Boolean).join(' · ') + '</small></button>';
+        '<b>' + F.dow(d.date) + ', ' + F.data(d.date) + '</b><small>' + [TIPO[d.tipo], tot].filter(Boolean).join(' · ') + '</small></button>' +
+        (window.Feriados ? window.Feriados.diaHtml(c.id, d.date) : '');
       if (d.itens.length) {
         h += '<ol>' + d.itens.map((i, n) => {
           const p = App.poi(i.id), tx = deslocTxt(i.desloc);

@@ -35,7 +35,7 @@
     if (isObj(o.pois)) Object.keys(o.pois).forEach(id => { const p = o.pois[id]; if (isObj(p)) { delete p.valor; delete p.transporte; } });
     if (isObj(o.legs)) Object.keys(o.legs).forEach(k => { if (isObj(o.legs[k])) { delete o.legs[k].real; delete o.legs[k].link; } });
     if (raiz) {
-      delete o.gerais; delete o.orcamento; delete o.spread; delete o.iof;
+      delete o.gerais; delete o.orcamento; delete o.spread; delete o.iof; delete o.divisao;
       if (isObj(o.assist)) delete o.assist.orcamento;
     }
   }
