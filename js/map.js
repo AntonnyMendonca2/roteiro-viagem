@@ -149,6 +149,14 @@
       }
     }
     const pos = d => { const s = world / (1 << d.z); return [x0 + d.x * s, y0 + d.y * s, s]; };
+    // Ladrilhos do nível anterior só ficam por baixo enquanto têm tamanho razoável e aparecem na tela.
+    // Num zoom grande (Europa → ruas) eles chegavam a ~70 mil px de largura e, com o filtro de cor do
+    // grupo (.l-tiles), congelavam a página por vários segundos.
+    const maxLado = 2 * Math.max(W, H);
+    lingering = lingering.filter(d => {
+      const p = pos(d);
+      return p[2] <= maxLado && p[0] < W && p[1] < H && p[0] + p[2] > 0 && p[1] + p[2] > 0;
+    });
     tilesG.selectAll('image').data(lingering.concat(tilesCur), d => d.key)
       .join(enter => enter.append('image').attr('preserveAspectRatio', 'none').attr('href', d => d.url))
       .each(function (d) {

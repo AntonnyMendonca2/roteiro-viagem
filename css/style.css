@@ -1157,3 +1157,9 @@ div.bag.warn b { color: var(--accent); }
 #tour .tr-btns .btn[disabled] { opacity: .4; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { #tour .tr-bl, #tour .tr-foco, #tour .tr-balao { transition: none; } }
 #tour.tr-livre .tr-bl { pointer-events: none; background: rgba(0, 0, 0, .35); }
+
+/* Zoom de cidade/ruas: linhas longas (rotas entre cidades, alternativas, prévias, bate-voltas) sem tracejado.
+   Nesse zoom elas chegam a ~1 milhão de px de comprimento e o navegador calcula cada tracinho da linha
+   inteira (inclusive fora da tela): a página congelava ao dar zoom numa cidade. Os caminhos curtos
+   dentro da cidade (dia a dia) continuam tracejados. */
+#map.lvl-city .route, #map.lvl-city .route-prev, #map.lvl-city .trip { stroke-dasharray: none !important; }

@@ -209,8 +209,9 @@
     jaPronto = !!(p.pronto && p.pronto());
     clearTimeout(avancando); avancando = null;
     render();
-    // traz o alvo para a área visível (a lateral rola)
-    setTimeout(() => { const a = alvoEl(); if (a && a.scrollIntoView) tentar(() => a.scrollIntoView({ block: 'center', behavior: 'smooth' })); posicionar(); }, 120);
+    // traz o alvo para a área visível (a lateral rola). Rolagem instantânea: a suave, junto com a animação
+    // de zoom do mapa, chegou a congelar a página (o balão já desliza suave até o novo lugar).
+    setTimeout(() => { const a = alvoEl(); if (a && a.scrollIntoView) tentar(() => a.scrollIntoView({ block: 'center' })); posicionar(); }, 120);
   }
 
   function proximo() {
